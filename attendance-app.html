@@ -399,13 +399,15 @@ function fmtDate(d) {
 async function api(action, data={}) {
   if(isDemo()) return demoHandler(action, data);
   try {
-    const res = await fetch(SCRIPT_URL, {
-      method: 'POST',
-      body: JSON.stringify({action, ...data})
-    });
-    return await res.json();
+    const url = new URL(SCRIPT_URL);
+    url.searchParams.append('action', action);
+    Object.keys(data).forEach(k => url.searchParams.append(k, typeof data[k]==='object'?JSON.stringify(data[k]):data[k]));
+    const res = await fetch(url.toString());
+    const text = await res.text();
+    try { return JSON.parse(text); }
+    catch(e) { return {ok:false, error:'Invalid response: '+text.slice(0,100)}; }
   } catch(e) {
-    return {ok:false, error:'Network error'};
+    return {ok:false, error:'Network error: '+e.message};
   }
 }
 
