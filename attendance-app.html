@@ -1,8 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+<title>Attendance App</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap');
+
+  :root {
+    --bg: #060d18;
+    --surface: #0a1525;
+    --border: #142238;
+    --text: #f0f0f0;
+    --muted: #8a9bb0;
+    --green: #1a9e60;
+    --green-bg: #0d2e1e;
+    --amber: #e0a020;
+    --amber-bg: #2a1e00;
+    --red: #e05050;
+    --red-bg: #2a0d0d;
+    --blue: #4a90d9;
+    --blue-bg: #0d1e30;
+    --radius: 12px;
+    --radius-sm: 8px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    font-size: 15px;
+  }
+
+  .app { max-width: 480px; margin: 0 auto; min-height: 100vh; background: var(--bg); }
+
+  .page { display: none; }
+  .page.active { display: block; }
+
+  /* TOP BAR */
+  .topbar {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  .topbar-title { font-size: 16px; font-weight: 600; }
+  .topbar-sub { font-size: 12px; color: var(--muted); margin-top: 1px; }
+
+  /* CARDS */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    margin-bottom: 10px;
+  }
+
+  /* BUTTONS */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    padding: 10px 18px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .btn:active { transform: scale(0.97); }
+  .btn-primary { background: #c0392b; color: #fff; border-color: #c0392b; }
+  .btn-green { background: var(--green); color: #fff; border-color: var(--green); }
+  .btn-sm { padding: 6px 12px; font-size: 13px; border-radius: 6px; }
+  .btn-block { width: 100%; }
+  .btn-danger { border-color: #e24b4a; color: var(--red); }
+
+  /* INPUTS */
+  input[type=text], input[type=password], select, textarea {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    margin-bottom: 10px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  input:focus, select:focus { border-color: var(--text); background: var(--surface); }
+
+  /* BADGES */
+  .badge {
+    display: inline-block;
+    font-size: 11px; font-weight: 600;
+    padding: 3px 9px;
+    border-radius: 20px;
+    letter-spacing: 0.02em;
+  }
+  .badge-present { background: var(--green-bg); color: var(--green); }
+  .badge-absent { background: var(--border); color: var(--muted); }
+  .badge-leave { background: var(--amber-bg); color: var(--amber); }
+  .badge-half { background: var(--blue-bg); color: var(--blue); }
+
+  /* AVATAR */
+  .avatar {
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; font-weight: 600;
+    flex-shrink: 0;
+  }
+
+  /* STAT GRID */
+  .stat-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+  .stat {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 12px 10px;
+    text-align: center;
+  }
+  .stat-num { font-size: 24px; font-weight: 600; }
+  .stat-label { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+  /* SECTION LABEL */
+  .sec-label {
+    font-size: 11px; font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin: 16px 0 8px;
+  }
+
+  /* TAB BAR */
+  .tabs {
+    display: flex; gap: 4px;
+    background: var(--surface);
+    border-radius: var(--radius-sm);
+    padding: 4px;
+    margin-bottom: 14px;
+    border: 1px solid var(--border);
+  }
+  .tab {
+    flex: 1; text-align: center;
+    padding: 8px 4px;
+    font-size: 13px; font-weight: 500;
+    border-radius: 6px;
+    cursor: pointer;
+    color: var(--muted);
+    transition: all 0.15s;
+  }
+  .tab.active { background: var(--text); color: #fff; }
+
+  /* STAFF CARD */
+  .staff-row {
+    display: flex; align-items: center; gap: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+    margin-bottom: 8px;
+  }
+  .staff-info { flex: 1; min-width: 0; }
+  .staff-name { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .staff-role { font-size: 12px; color: var(--muted); margin-top: 1px; }
+
+  /* LOGIN PAGE */
+  .login-wrap {
+    padding: 48px 24px 24px;
+    min-height: 100vh;
+    background: #060d18;
+  }
+  .login-logo {
+    text-align: center;
+    margin-bottom: 32px;
+  }
+  .login-logo-icon {
+    width: 56px; height: 56px;
+    background: var(--text);
+    border-radius: 16px;
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 12px;
+    font-size: 24px;
+  }
+  .login-logo h1 { font-size: 22px; font-weight: 600; }
+  .login-logo p { font-size: 13px; color: var(--muted); margin-top: 4px; }
+
+  /* REPORT TABLE */
+  .report-scroll { overflow-x: auto; margin: 0 -4px; padding: 0 4px; }
+  .report-table { width: 100%; border-collapse: collapse; font-size: 12px; font-family: 'DM Mono', monospace; }
+  .report-table th { padding: 6px 6px; text-align: center; color: var(--muted); font-weight: 500; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  .report-table th:first-child { text-align: left; }
+  .report-table td { padding: 6px 6px; text-align: center; border-bottom: 1px solid var(--border); }
+  .report-table td:first-child { text-align: left; font-family: 'DM Sans', sans-serif; font-weight: 500; white-space: nowrap; }
+  .r-p { background: var(--green-bg); color: var(--green); border-radius: 4px; font-weight: 600; }
+  .r-l { background: var(--amber-bg); color: var(--amber); border-radius: 4px; }
+  .r-h { background: var(--blue-bg); color: var(--blue); border-radius: 4px; }
+  .r-a { color: var(--muted); }
+
+  .err { color: var(--red); font-size: 12px; margin-top: -6px; margin-bottom: 10px; }
+
+  /* NOTICE BOX */
+  .notice {
+    background: var(--amber-bg);
+    border: 1px solid #f0d080;
+    border-radius: var(--radius-sm);
+    padding: 12px 14px;
+    font-size: 13px;
+    color: var(--amber);
+    margin-bottom: 14px;
+    line-height: 1.5;
+  }
+
+  .pad { padding: 14px; }
+
+  /* SLOT BUTTONS */
+  .slot-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+  .slot-card {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 10px;
+    text-align: center;
+  }
+  .slot-title { font-size: 11px; color: var(--muted); margin-bottom: 6px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em; }
+  .slot-time { font-size: 13px; font-weight: 600; color: var(--green); margin-bottom: 4px; }
+
+  /* LOADING */
+  .loading { text-align: center; padding: 32px; color: var(--muted); font-size: 14px; }
+  .spinner {
+    width: 24px; height: 24px;
+    border: 2px solid var(--border);
+    border-top-color: var(--text);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    margin: 0 auto 10px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ===== LOGIN ===== -->
+  <div id="page-login" class="page active">
+    <div class="login-wrap">
+      <div class="login-logo">
+        <img src="data:image/png;base64,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1zkM9RP5JKSwPPGYW4acNDjz73EeAaBkZ90tJMppZY7jJNIxhcyIU0rXSHuaCW4GfEnCr+imDEMjqS812oLzPdbhJxTSnzWg+bGwfJY3wA+3mTzJXfSd5m0/qOiu8Ic7qJPjGN/LjPJ7fa0nHpwsWiuFWCfudo5shaLu97c8nCjmGfTzYtF3du+l9S0lLdLTdI5LhSnqHxOhkY6WF2SCOJozwuz7HnwUbophMRAiItAiIgIiICIiAiIgLloBOC4N9JB/qXCIr9mxRHtq4W+tr/ursIIf+n04/Ql+4vnRTE824tXw/wDvy+kU8HfcqUfoTfcXYUkB/lSjHrZN9xfIizpnm3Xa0jt2cT6vl9gooD/K1D7RN9xfo230x7bzQD9GX7ix6KaLeKfb4dq9J2MduxrP/dv2ZIW2l+m6D9WT7q7C10pOBe7f/wCJ91YtFN3fxT7fDpHTOj9/R6/m/wCzLi0Ux/ly2/rO+6uRZqf6dtv67v7lh0U3d/HP4j4b670Xy1fVf9mY+BafP+PbX9Y7+5c/AsGP8e2v6w/3LDIpu9p4/aPheu9E8tHqv+zM/AlOf5dtn65/uXPwJTfT1s+sP9ywqJutp45/EfDXXuh+Vr6r/szfwHTfT1s+sKfAVN9P2z6xYRFN1tPHP4j4Xr/QvK19V/2Zz4Cpvp+2fWJ8A0x/l+1/WLBom62nj9o+Dr/QfK19V/2Zz4Bp/p+1/Wrn4Ap/p+1/WrBIm62vj9oXr/QfKR6r/LO/AEH09a/rU+AIPp61/WrBIm62v+ntC9f6B5SPXf5Z34Ag+nrX9an4Pwd9+tf1qwSJutr4/aDr/QPKR67/ACzv4PwfT1r+uCfg/B9PWr64LBIputr/AKe0L/Yfx/lI9d/lnfwfh+nrV9cE/B+EczfrV9cFgkTdbX/T2g/sP4/ykeu/y7Sta2V7WSCRrXENeAQHDxwea6oi9L4szmciIiIIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiAiIgIiICIiD//2Q==" alt="Carewax" style="width:140px;height:auto;object-fit:contain;margin-bottom:8px;filter:drop-shadow(0 2px 8px rgba(0,0,0,0.5))" />
+        <h1 style="font-size:26px;font-weight:700;letter-spacing:0.02em">Carewax</h1>
+        <p style="font-size:13px;color:var(--muted)">Attendance</p>
+      </div>
+      <div class="card">
+        <label style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:6px">Username</label>
+        <input type="text" id="l-user" placeholder="Enter username" />
+        <label style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:6px">Password</label>
+        <input type="password" id="l-pass" placeholder="Enter password" onkeydown="if(event.key==='Enter')doLogin()" />
+        <div class="err" id="l-err" style="display:none">Incorrect username or password</div>
+        <button class="btn btn-primary btn-block" onclick="doLogin()">Sign in</button>
+      </div>
+      <div id="setup-notice" style="display:none">
+        <div class="notice">
+          &#9888; Google Sheets backend not configured yet. Running in demo mode — data will not be saved permanently.<br><br>
+          <strong>To enable permanent storage:</strong> Open this file, find <code>SCRIPT_URL</code> at the top, and paste your Google Apps Script Web App URL.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== STAFF VIEW ===== -->
+  <div id="page-staff" class="page">
+    <div class="topbar">
+      <div>
+        <div class="topbar-title" id="s-welcome"></div>
+        <div class="topbar-sub" id="s-date"></div>
+      </div>
+      <button class="btn btn-sm" onclick="doLogout()">Logout</button>
+    </div>
+    <div class="pad">
+      <div class="sec-label">Today's attendance</div>
+      <div class="card" id="s-today"></div>
+      <div class="sec-label">This month</div>
+      <div class="card" id="s-month"></div>
+    </div>
+  </div>
+
+  <!-- ===== ADMIN VIEW ===== -->
+  <div id="page-admin" class="page">
+    <div class="topbar">
+      <div>
+        <div><div style="font-size:12px;font-weight:700;color:var(--muted);letter-spacing:0.05em">CAREWAX</div><div class="topbar-title">Admin Panel</div></div>
+        <div class="topbar-sub" id="a-date"></div>
+      </div>
+      <button class="btn btn-sm" onclick="doLogout()">Logout</button>
+    </div>
+    <div class="pad">
+      <div class="tabs">
+        <div class="tab active" onclick="aTab('today',this)">Today</div>
+        <div class="tab" onclick="aTab('report',this)">Report</div>
+        <div class="tab" onclick="aTab('staff',this)">Staff</div>
+      </div>
+
+      <!-- TODAY -->
+      <div id="a-today">
+        <div class="stat-grid" id="a-stats"></div>
+        <div class="sec-label">All staff</div>
+        <div id="a-list"></div>
+      </div>
+
+      <!-- REPORT -->
+      <div id="a-report" style="display:none">
+        <div style="display:flex;gap:8px;margin-bottom:12px">
+          <select id="r-month" style="flex:1;margin:0"></select>
+          <button class="btn btn-sm btn-primary" onclick="loadReport()">View</button>
+        </div>
+        <div id="r-area"></div>
+        <div style="margin-top:10px;font-size:11px;color:var(--muted)">
+          P = Present &nbsp; H = Half day &nbsp; L = Leave &nbsp; - = Absent
+        </div>
+      </div>
+
+      <!-- STAFF MANAGEMENT -->
+      <div id="a-staff" style="display:none">
+        <div class="sec-label">Add new staff</div>
+        <div class="card">
+          <input type="text" id="ns-name" placeholder="Full name" />
+          <input type="text" id="ns-role" placeholder="Role / designation" />
+          <input type="text" id="ns-user" placeholder="Username (for login)" />
+          <input type="password" id="ns-pass" placeholder="Password" />
+          <button class="btn btn-primary btn-block" onclick="addStaff()">Add staff</button>
+          <div class="err" id="ns-err" style="display:none"></div>
+        </div>
+        <div class="sec-label">Current staff</div>
+        <div id="a-staff-list"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
 <script>
 // ============================================================
-// CONFIG — UPDATED URL ✅
+// CONFIG — paste your Google Apps Script Web App URL here
 // ============================================================
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw6uu_6jHgqNTg2NSFGKyIqf_y90aPLysm0xpCCVnCi0Xk4wWC-zQdfYTGIFhDnjKvYHA/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzF-7JkHfZc3sJdnZxVL3SxgncX0_EnBWCIhyv5s00TBNtkMuawau8bho1qiS736fvDCA/exec';
 // ============================================================
 
 const COLORS = [
@@ -12,58 +363,112 @@ const COLORS = [
   {bg:'#faeeda',c:'#633806'}
 ];
 
+// Demo mode data (used if SCRIPT_URL not set)
+let demoUsers = [
+  {id:1,name:'Adnan',role:'Staff',username:'adnan',password:'carewax'},
+  {id:2,name:'Ajzal',role:'Staff',username:'ajzal',password:'ajzal8338'},
+  {id:3,name:'Nishana',role:'Staff',username:'nishana',password:'nishana687'},
+  {id:4,name:'Anitha',role:'Staff',username:'anitha',password:'anitha876'},
+  {id:5,name:'Nihal',role:'Staff',username:'nihal',password:'nihal456'},
+  {id:6,name:'Vipin',role:'Staff',username:'vipin',password:'vipin345'},
+];
+let demoAtt = {};
+let nextDemoId = 8;
+
 let currentUser = null;
 const isDemo = () => false;
-
-// ===== API FIXED ✅ =====
-async function api(action, data={}) {
-  if(isDemo()) return demoHandler(action, data);
-
-  try {
-    const res = await fetch(SCRIPT_URL, {
-      method: 'POST',
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({action, ...data})
-    });
-
-    const text = await res.text();
-
-    try {
-      return JSON.parse(text);
-    } catch(err) {
-      console.log("Invalid JSON:", text);
-      return {ok:false, error:'Invalid response'};
-    }
-
-  } catch(e) {
-    console.log(e);
-    return {ok:false, error:'Network error'};
-  }
-}
-
-// باقي code same ആണ് 👇 (no change needed)
 
 function todayStr() {
   const d = new Date();
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 }
-
 function monthStr(offset=0) {
   const d = new Date();
   d.setMonth(d.getMonth()-offset);
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
 }
-
 function getTime() {
   return new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});
 }
-
 function initials(n) { return n.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2); }
-
 function fmtDate(d) {
   return new Date(d+'T00:00:00').toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+}
+
+// API calls
+async function api(action, data={}) {
+  if(isDemo()) return demoHandler(action, data);
+  try {
+    const res = await fetch(SCRIPT_URL, {
+      method: 'POST',
+      body: JSON.stringify({action, ...data})
+    });
+    return await res.json();
+  } catch(e) {
+    return {ok:false, error:'Network error'};
+  }
+}
+
+// Demo handler (simulates backend)
+function demoHandler(action, data) {
+  const today = todayStr();
+  if(!demoAtt[today]) demoAtt[today] = {};
+
+  if(action === 'login') {
+    if(data.username === 'Admin' && data.password === 'admin321')
+      return {ok:true, user:{isAdmin:true, name:'Admin'}};
+    const u = demoUsers.find(x=>x.username===data.username && x.password===data.password);
+    if(u) return {ok:true, user:{...u, isAdmin:false}};
+    return {ok:false};
+  }
+  if(action === 'getStaff') return {ok:true, staff:demoUsers};
+  if(action === 'getTodayAtt') {
+    return {ok:true, records: demoAtt[today]||{}};
+  }
+  if(action === 'markAtt') {
+    if(!demoAtt[data.date]) demoAtt[data.date] = {};
+    if(!demoAtt[data.date][data.uid]) demoAtt[data.date][data.uid] = {};
+    demoAtt[data.date][data.uid][data.slot] = data.time;
+    return {ok:true};
+  }
+  if(action === 'markLeave') {
+    if(!demoAtt[data.date]) demoAtt[data.date] = {};
+    demoAtt[data.date][data.uid] = {leave:true};
+    return {ok:true};
+  }
+  if(action === 'removeLeave') {
+    if(demoAtt[data.date] && demoAtt[data.date][data.uid]) delete demoAtt[data.date][data.uid].leave;
+    return {ok:true};
+  }
+  if(action === 'getMonthReport') {
+    const mk = data.month;
+    const recs = {};
+    Object.keys(demoAtt).filter(k=>k.startsWith(mk)).forEach(k=>{
+      recs[k] = demoAtt[k];
+    });
+    return {ok:true, records:recs};
+  }
+  if(action === 'getStaffMonth') {
+    const mk = data.month;
+    const uid = data.uid;
+    let present=0, days=0;
+    Object.keys(demoAtt).filter(k=>k.startsWith(mk)).forEach(k=>{
+      days++;
+      const r = (demoAtt[k]||{})[uid];
+      if(r && (r.morning||r.evening)) present++;
+    });
+    return {ok:true, present, days};
+  }
+  if(action === 'addStaff') {
+    if(demoUsers.find(u=>u.username===data.username)) return {ok:false, error:'Username exists'};
+    demoUsers.push({id:nextDemoId++, name:data.name, role:data.role, username:data.username, password:data.password});
+    return {ok:true};
+  }
+  if(action === 'removeStaff') {
+    demoUsers = demoUsers.filter(u=>u.id!==data.id);
+    return {ok:true};
+  }
+  return {ok:false};
 }
 
 // ===== LOGIN =====
@@ -71,9 +476,7 @@ async function doLogin() {
   const u = document.getElementById('l-user').value.trim();
   const p = document.getElementById('l-pass').value.trim();
   document.getElementById('l-err').style.display = 'none';
-
   const res = await api('login', {username:u, password:p});
-
   if(res.ok) {
     currentUser = res.user;
     if(res.user.isAdmin) { showPage('page-admin'); initAdmin(); }
@@ -94,4 +497,373 @@ function showPage(id) {
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById(id).classList.add('active');
 }
+
+// ===== STAFF =====
+async function initStaff() {
+  const u = currentUser;
+  document.getElementById('s-welcome').textContent = 'Hello, '+u.name.split(' ')[0];
+  document.getElementById('s-date').textContent = fmtDate(todayStr());
+  renderStaffToday();
+  renderStaffMonth();
+}
+
+async function renderStaffToday() {
+  const today = todayStr();
+  const res = await api('getTodayAtt');
+  const rec = (res.records||{})[currentUser.id] || {};
+  const col = COLORS[(currentUser.id-1)%COLORS.length];
+  let html = `<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+    <div class="avatar" style="background:${col.bg};color:${col.c}">${initials(currentUser.name)}</div>
+    <div><div style="font-weight:600">${currentUser.name}</div><div style="font-size:12px;color:var(--muted)">${currentUser.role}</div></div>
+  </div>`;
+  html += '<div class="slot-grid">';
+  ['morning','evening'].forEach(slot=>{
+    const marked = rec[slot];
+    const label = slot==='morning' ? 'Morning (In)' : 'Evening (Out)';
+    html += `<div class="slot-card">
+      <div class="slot-title">${label}</div>`;
+    if(marked) {
+      html += `<div class="slot-time">${marked}</div>
+        <span class="badge badge-present">Marked</span>`;
+    } else if(rec.leave) {
+      html += `<span class="badge badge-leave">On Leave</span>`;
+    } else {
+      html += `<button class="btn btn-green btn-sm btn-block" onclick="staffMark('${slot}')">Mark now</button>`;
+    }
+    html += '</div>';
+  });
+  html += '</div>';
+  document.getElementById('s-today').innerHTML = html;
+}
+
+async function staffMark(slot) {
+  const today = todayStr();
+  const res = await api('getTodayAtt');
+  const rec = (res.records||{})[currentUser.id] || {};
+  if(rec[slot]) return;
+  await api('markAtt', {date:today, uid:currentUser.id, slot, time:getTime()});
+  renderStaffToday();
+  renderStaffMonth();
+}
+
+async function renderStaffMonth() {
+  const mk = monthStr();
+  const res = await api('getStaffMonth', {month:mk, uid:currentUser.id});
+  const present = res.present||0, days = res.days||0;
+  document.getElementById('s-month').innerHTML = `
+    <div style="display:flex;gap:20px;align-items:center">
+      <div><div style="font-size:28px;font-weight:600;color:var(--green)">${present}</div><div style="font-size:12px;color:var(--muted)">Days present</div></div>
+      <div style="width:1px;height:40px;background:var(--border)"></div>
+      <div><div style="font-size:28px;font-weight:600">${days}</div><div style="font-size:12px;color:var(--muted)">Working days</div></div>
+      <div style="width:1px;height:40px;background:var(--border)"></div>
+      <div><div style="font-size:28px;font-weight:600;color:var(--red)">${days-present}</div><div style="font-size:12px;color:var(--muted)">Absent</div></div>
+    </div>`;
+}
+
+// ===== ADMIN =====
+async function initAdmin() {
+  document.getElementById('a-date').textContent = fmtDate(todayStr());
+  renderAdminToday();
+  populateMonths();
+}
+
+function aTab(tab, el) {
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  ['today','report','staff'].forEach(t=>{
+    document.getElementById('a-'+t).style.display = t===tab?'block':'none';
+  });
+  if(tab==='today') renderAdminToday();
+  if(tab==='staff') renderAdminStaff();
+}
+
+async function renderAdminToday() {
+  document.getElementById('a-stats').innerHTML = '<div class="loading"><div class="spinner"></div>Loading...</div>';
+  const [sr, ar] = await Promise.all([api('getStaff'), api('getTodayAtt')]);
+  const staff = sr.staff||[];
+  const recs = ar.records||{};
+  let cP=0,cA=0,cL=0;
+  staff.forEach(u=>{
+    const r=recs[u.id];
+    if(!r||(!r.morning&&!r.evening&&!r.leave)) cA++;
+    else if(r.leave) cL++;
+    else cP++;
+  });
+  document.getElementById('a-stats').innerHTML = `
+    <div class="stat"><div class="stat-num" style="color:var(--green)">${cP}</div><div class="stat-label">Present</div></div>
+    <div class="stat"><div class="stat-num" style="color:var(--muted)">${cA}</div><div class="stat-label">Absent</div></div>
+    <div class="stat"><div class="stat-num" style="color:var(--amber)">${cL}</div><div class="stat-label">Leave</div></div>`;
+
+  let html = '';
+  staff.forEach((u,i)=>{
+    const col = COLORS[i%COLORS.length];
+    const r = recs[u.id]||{};
+    const hasAtt = r.morning||r.evening;
+    const status = r.leave?'leave':hasAtt?'present':'absent';
+    const bClass = status==='present'?'badge-present':status==='leave'?'badge-leave':'badge-absent';
+    const bText = status==='present'?'Present':status==='leave'?'Leave':'Absent';
+    html += `<div class="staff-row">
+      <div class="avatar" style="background:${col.bg};color:${col.c};width:36px;height:36px;font-size:12px">${initials(u.name)}</div>
+      <div class="staff-info">
+        <div class="staff-name">${u.name}</div>
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px">
+          <span class="badge ${bClass}">${bText}</span>
+          ${r.morning?`<span style="font-size:11px;color:var(--muted)">AM:${r.morning}</span>`:''}
+          ${r.evening?`<span style="font-size:11px;color:var(--muted)">PM:${r.evening}</span>`:''}
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+          ${!r.morning&&!r.leave?`<button class="btn btn-sm btn-green" onclick="adminMark(${u.id},'morning')">+ Morning</button>`:''}
+          ${!r.evening&&!r.leave?`<button class="btn btn-sm btn-green" onclick="adminMark(${u.id},'evening')">+ Evening</button>`:''}
+          ${!r.leave?`<button class="btn btn-sm" onclick="adminLeave(${u.id},true)">Mark leave</button>`:`<button class="btn btn-sm btn-danger" onclick="adminLeave(${u.id},false)">Remove leave</button>`}
+        </div>
+      </div>
+    </div>`;
+  });
+  document.getElementById('a-list').innerHTML = html;
+}
+
+async function adminMark(uid, slot) {
+  await api('markAtt', {date:todayStr(), uid, slot, time:getTime()});
+  renderAdminToday();
+}
+async function adminLeave(uid, mark) {
+  if(mark) await api('markLeave', {date:todayStr(), uid});
+  else await api('removeLeave', {date:todayStr(), uid});
+  renderAdminToday();
+}
+
+function populateMonths() {
+  const sel = document.getElementById('r-month');
+  sel.innerHTML = '';
+  for(let i=0;i<6;i++) {
+    const d = new Date();
+    d.setMonth(d.getMonth()-i);
+    const val = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+    const lbl = d.toLocaleDateString('en-IN',{month:'long',year:'numeric'});
+    sel.innerHTML += `<option value="${val}">${lbl}</option>`;
+  }
+}
+
+async function loadReport() {
+  const mk = document.getElementById('r-month').value;
+  document.getElementById('r-area').innerHTML = '<div class="loading"><div class="spinner"></div>Loading...</div>';
+  const [sr, rr] = await Promise.all([api('getStaff'), api('getMonthReport',{month:mk})]);
+  const staff = sr.staff||[];
+  const recs = rr.records||{};
+  const [yr,mo] = mk.split('-').map(Number);
+  const daysInMonth = new Date(yr,mo,0).getDate();
+  const days = [];
+  for(let d=1;d<=daysInMonth;d++) days.push(yr+'-'+String(mo).padStart(2,'0')+'-'+String(d).padStart(2,'0'));
+
+  let html = '<div class="report-scroll"><table class="report-table"><thead><tr><th>Name</th>';
+  days.forEach(d=>{ html += `<th>${parseInt(d.split('-')[2])}</th>`; });
+  html += '<th>Total</th></tr></thead><tbody>';
+  staff.forEach(u=>{
+    html += `<tr><td>${u.name.split(' ')[0]}</td>`;
+    let total=0;
+    days.forEach(dk=>{
+      const r=(recs[dk]||{})[u.id];
+      let sym='-', cls='r-a';
+      if(r&&r.leave){sym='L';cls='r-l';}
+      else if(r&&r.morning&&r.evening){sym='P';cls='r-p';total++;}
+      else if(r&&(r.morning||r.evening)){sym='H';cls='r-h';total+=0.5;}
+      html += `<td class="${cls}">${sym}</td>`;
+    });
+    html += `<td style="font-weight:600">${total}</td></tr>`;
+  });
+  html += '</tbody></table></div>';
+  document.getElementById('r-area').innerHTML = html;
+}
+
+async function renderAdminStaff() {
+  const res = await api('getStaff');
+  const staff = res.staff||[];
+  let html = '';
+  staff.forEach((u,i)=>{
+    const col = COLORS[i%COLORS.length];
+    html += `<div class="staff-row">
+      <div class="avatar" style="background:${col.bg};color:${col.c};width:36px;height:36px;font-size:12px">${initials(u.name)}</div>
+      <div class="staff-info">
+        <div class="staff-name">${u.name}</div>
+        <div style="font-size:12px;color:var(--muted)">${u.role} &nbsp;·&nbsp; @${u.username}</div>
+      </div>
+      <button class="btn btn-sm btn-danger" onclick="removeStaff(${u.id})">Remove</button>
+    </div>`;
+  });
+  document.getElementById('a-staff-list').innerHTML = html||'<div style="text-align:center;padding:20px;color:var(--muted)">No staff added</div>';
+}
+
+async function addStaff() {
+  const name = document.getElementById('ns-name').value.trim();
+  const role = document.getElementById('ns-role').value.trim();
+  const username = document.getElementById('ns-user').value.trim();
+  const password = document.getElementById('ns-pass').value.trim();
+  const err = document.getElementById('ns-err');
+  if(!name||!role||!username||!password){err.textContent='All fields required';err.style.display='block';return;}
+  const res = await api('addStaff',{name,role,username,password});
+  if(!res.ok){err.textContent=res.error||'Error adding staff';err.style.display='block';return;}
+  err.style.display='none';
+  ['ns-name','ns-role','ns-user','ns-pass'].forEach(id=>document.getElementById(id).value='');
+  renderAdminStaff();
+}
+
+async function removeStaff(id) {
+  if(!confirm('Remove this staff member?')) return;
+  await api('removeStaff',{id});
+  renderAdminStaff();
+}
+
+// Init
+if(isDemo()) {
+  document.getElementById('setup-notice').style.display='block';
+}
 </script>
+
+<!--
+=====================================================
+GOOGLE APPS SCRIPT CODE
+(Create a new Apps Script at script.google.com,
+paste this code, deploy as Web App)
+=====================================================
+
+function doPost(e) {
+  const data = JSON.parse(e.postData.contents);
+  const action = data.action;
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  // Helper: get or create sheet
+  function getSheet(name) {
+    return ss.getSheetByName(name) || ss.insertSheet(name);
+  }
+
+  // USERS sheet: id | name | role | username | password
+  function getUsers() {
+    const sh = getSheet('Users');
+    const rows = sh.getDataRange().getValues();
+    if(rows.length <= 1) return [];
+    return rows.slice(1).map(r=>({id:r[0],name:r[1],role:r[2],username:r[3],password:r[4]}));
+  }
+
+  if(action === 'login') {
+    if(data.username === 'Admin' && data.password === 'admin321')
+      return ok({user:{isAdmin:true,name:'Admin'}});
+    const users = getUsers();
+    const u = users.find(x=>x.username===data.username && x.password===data.password);
+    if(u) return ok({user:{...u,isAdmin:false}});
+    return fail();
+  }
+
+  if(action === 'getStaff') {
+    return ok({staff: getUsers()});
+  }
+
+  if(action === 'getTodayAtt') {
+    const today = data.date || Utilities.formatDate(new Date(),'Asia/Kolkata','yyyy-MM-dd');
+    const sh = getSheet('Att_'+today.replace(/-/g,''));
+    const rows = sh.getDataRange().getValues();
+    const records = {};
+    rows.slice(1).forEach(r=>{
+      records[r[0]] = {morning:r[1]||null,evening:r[2]||null,leave:r[3]||false};
+    });
+    return ok({records});
+  }
+
+  if(action === 'markAtt') {
+    const sh = getSheet('Att_'+data.date.replace(/-/g,''));
+    if(sh.getLastRow()===0) sh.appendRow(['uid','morning','evening','leave']);
+    const rows = sh.getDataRange().getValues();
+    let found = false;
+    for(let i=1;i<rows.length;i++){
+      if(rows[i][0]==data.uid){
+        const col = data.slot==='morning'?2:3;
+        sh.getRange(i+1,col).setValue(data.time);
+        found=true; break;
+      }
+    }
+    if(!found){
+      const row = [data.uid,'','',''];
+      row[data.slot==='morning'?1:2] = data.time;
+      sh.appendRow(row);
+    }
+    return ok({});
+  }
+
+  if(action === 'markLeave') {
+    const sh = getSheet('Att_'+data.date.replace(/-/g,''));
+    if(sh.getLastRow()===0) sh.appendRow(['uid','morning','evening','leave']);
+    const rows = sh.getDataRange().getValues();
+    let found=false;
+    for(let i=1;i<rows.length;i++){
+      if(rows[i][0]==data.uid){sh.getRange(i+1,4).setValue(true);found=true;break;}
+    }
+    if(!found) sh.appendRow([data.uid,'','',true]);
+    return ok({});
+  }
+
+  if(action === 'removeLeave') {
+    const sh = getSheet('Att_'+data.date.replace(/-/g,''));
+    const rows = sh.getDataRange().getValues();
+    for(let i=1;i<rows.length;i++){
+      if(rows[i][0]==data.uid){sh.getRange(i+1,4).setValue('');break;}
+    }
+    return ok({});
+  }
+
+  if(action === 'getMonthReport') {
+    const mk = data.month.replace('-','');
+    const sheets = SpreadsheetApp.getActiveSpreadsheet().getSheets();
+    const records = {};
+    sheets.filter(s=>s.getName().startsWith('Att_'+mk)).forEach(sh=>{
+      const dateKey = sh.getName().replace('Att_','');
+      const fmtKey = dateKey.slice(0,4)+'-'+dateKey.slice(4,6)+'-'+dateKey.slice(6,8);
+      const rows = sh.getDataRange().getValues();
+      const recs = {};
+      rows.slice(1).forEach(r=>{recs[r[0]]={morning:r[1]||null,evening:r[2]||null,leave:r[3]||false};});
+      records[fmtKey] = recs;
+    });
+    return ok({records});
+  }
+
+  if(action === 'getStaffMonth') {
+    const mk = data.month.replace('-','');
+    const sheets = SpreadsheetApp.getActiveSpreadsheet().getSheets();
+    let present=0,days=0;
+    sheets.filter(s=>s.getName().startsWith('Att_'+mk)).forEach(sh=>{
+      days++;
+      const rows = sh.getDataRange().getValues();
+      rows.slice(1).forEach(r=>{
+        if(r[0]==data.uid&&(r[1]||r[2])) present++;
+      });
+    });
+    return ok({present,days});
+  }
+
+  if(action === 'addStaff') {
+    const users = getUsers();
+    if(users.find(u=>u.username===data.username)) return fail('Username exists');
+    const sh = getSheet('Users');
+    if(sh.getLastRow()===0) sh.appendRow(['id','name','role','username','password']);
+    const newId = users.length ? Math.max(...users.map(u=>u.id))+1 : 1;
+    sh.appendRow([newId,data.name,data.role,data.username,data.password]);
+    return ok({});
+  }
+
+  if(action === 'removeStaff') {
+    const sh = getSheet('Users');
+    const rows = sh.getDataRange().getValues();
+    for(let i=1;i<rows.length;i++){
+      if(rows[i][0]==data.id){sh.deleteRow(i+1);break;}
+    }
+    return ok({});
+  }
+
+  return fail('Unknown action');
+
+  function ok(d){return ContentService.createTextOutput(JSON.stringify({ok:true,...d})).setMimeType(ContentService.MimeType.JSON);}
+  function fail(msg){return ContentService.createTextOutput(JSON.stringify({ok:false,error:msg||'failed'})).setMimeType(ContentService.MimeType.JSON);}
+}
+
+=====================================================
+-->
+</body>
+</html>
