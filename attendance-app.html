@@ -192,6 +192,12 @@ function fmtDate(d){return new Date(d+"T00:00:00").toLocaleDateString("en-IN",{w
 function toTimeInput(t){if(!t)return"";try{const[hm,ap]=t.split(" ");let[h,m]=hm.split(":").map(Number);if(ap==="PM"&&h!==12)h+=12;if(ap==="AM"&&h===12)h=0;return String(h).padStart(2,"0")+":"+String(m).padStart(2,"0");}catch(e){return"";}}
 function fromTimeInput(t){if(!t)return"";const[h,m]=t.split(":").map(Number);const ap=h>=12?"PM":"AM";const h12=h%12||12;return String(h12).padStart(2,"0")+":"+String(m).padStart(2,"0")+" "+ap;}
 
+// Local cache with TTL
+const localCache={};
+function setCache(key,val,ttl=30000){localCache[key]={val,exp:Date.now()+ttl};}
+function getCache(key){const c=localCache[key];if(c&&c.exp>Date.now())return c.val;return null;}
+function clearCache(key){delete localCache[key];}
+
 async function api(action,data={}){
   try{
     const url=new URL(SCRIPT_URL);
@@ -201,6 +207,15 @@ async function api(action,data={}){
     const text=await res.text();
     try{return JSON.parse(text);}catch(e){return{ok:false,error:"Parse error"};}
   }catch(e){return{ok:false,error:"Network error"};}
+}
+
+async function apiCached(action,data={},ttl=30000){
+  const key=action+JSON.stringify(data);
+  const cached=getCache(key);
+  if(cached)return cached;
+  const res=await api(action,data);
+  if(res.ok)setCache(key,res,ttl);
+  return res;
 }
 
 async function doLogin(){
@@ -223,7 +238,7 @@ async function initStaff(){
   renderStaffToday();renderStaffMonth();
 }
 async function renderStaffToday(){
-  const res=await api("getTodayAtt");
+  const res=await apiCached("getTodayAtt",{},10000);
   const rec=(res.records||{})[currentUser.id]||{};
   const col=COLORS[(currentUser.id-1)%COLORS.length];
   let html=`<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
@@ -243,15 +258,26 @@ async function renderStaffToday(){
   document.getElementById("s-today").innerHTML=html;
 }
 async function staffMark(slot){
-  const res=await api("getTodayAtt");
-  const rec=(res.records||{})[currentUser.id]||{};
+  // Optimistic update — show immediately
+  const t=getTime();
+  const cacheKey='getTodayAtt{}';
+  const cached=getCache(cacheKey)||{ok:true,records:{}};
+  if(!cached.records)cached.records={};
+  if(!cached.records[currentUser.id])cached.records[currentUser.id]={};
+  const rec=cached.records[currentUser.id];
   if(rec[slot]||rec.absent)return;
-  await api("markAtt",{date:todayStr(),uid:currentUser.id,slot,time:getTime()});
-  renderStaffToday();renderStaffMonth();
+  rec[slot]=t;
+  setCache(cacheKey,cached,10000);
+  renderStaffToday();
+  // Save in background
+  api("markAtt",{date:todayStr(),uid:currentUser.id,slot,time:t}).then(r=>{
+    clearCache(cacheKey);
+    renderStaffMonth();
+  });
 }
 async function renderStaffMonth(){
   const mk=monthStr();
-  const res=await api("getStaffMonth",{month:mk,uid:currentUser.id});
+  const res=await apiCached("getStaffMonth",{month:mk,uid:currentUser.id},60000);
   const present=res.present||0,days=res.days||0,absent=days-present;
   document.getElementById("s-month").innerHTML=`
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;text-align:center">
@@ -274,8 +300,8 @@ function aTab(tab,el){
 async function renderAdminToday(){
   document.getElementById("a-stats").innerHTML=`<div class="loading" style="grid-column:1/-1"><div class="spinner"></div></div>`;
   const[sr,ar]=await Promise.all([
-    cache.staff?Promise.resolve({ok:true,staff:cache.staff}):api("getStaff"),
-    api("getTodayAtt")
+    cache.staff?Promise.resolve({ok:true,staff:cache.staff}):apiCached("getStaff",{},300000),
+    apiCached("getTodayAtt",{},10000)
   ]);
   if(sr.ok)cache.staff=sr.staff;
   const staff=cache.staff||[];
@@ -343,7 +369,7 @@ async function saveEdit(){
     if(!morning&&!evening)await api("clearAtt",{date:editTarget.date,uid:editTarget.uid});
   }
   btn.textContent="Save";btn.disabled=false;
-  closeEdit();renderAdminToday();
+  Object.keys(localCache).forEach(k=>{if(k.startsWith("getTodayAtt"))delete localCache[k];});closeEdit();renderAdminToday();
 }
 
 function populateMonths(){
@@ -359,7 +385,7 @@ async function loadReport(){
   const mk=document.getElementById("r-month").value;
   document.getElementById("r-area").innerHTML=`<div class="loading"><div class="spinner"></div>Loading...</div>`;
   const[sr,rr]=await Promise.all([
-    cache.staff?Promise.resolve({ok:true,staff:cache.staff}):api("getStaff"),
+    cache.staff?Promise.resolve({ok:true,staff:cache.staff}):apiCached("getStaff",{},300000),
     api("getMonthReport",{month:mk})
   ]);
   if(sr.ok)cache.staff=sr.staff;
@@ -422,9 +448,7 @@ async function addStaff(){
   err.style.display="none";
   const res=await api("addStaff",{name,role,username,password});
   if(!res.ok){err.textContent=res.error||"Error adding staff";err.style.display="block";return;}
-  cache.staff=null;
-  ["ns-name","ns-role","ns-user","ns-pass"].forEach(id=>document.getElementById(id).value="");
-  renderAdminStaff();
+  cache.staff=null;clearCache("getStaff{}");["ns-name","ns-role","ns-user","ns-pass"].forEach(id=>document.getElementById(id).value="");renderAdminStaff();
 }
 async function removeStaff(id){
   if(!confirm("Remove this staff member?"))return;
