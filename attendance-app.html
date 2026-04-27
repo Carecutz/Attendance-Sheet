@@ -402,7 +402,7 @@ async function api(action, data={}) {
     const url = new URL(SCRIPT_URL);
     url.searchParams.append('action', action);
     Object.keys(data).forEach(k => url.searchParams.append(k, typeof data[k]==='object'?JSON.stringify(data[k]):data[k]));
-    const res = await fetch(url.toString());
+    const res = await fetch(url.toString(), {redirect:'follow'});
     const text = await res.text();
     try { return JSON.parse(text); }
     catch(e) { return {ok:false, error:'Invalid response: '+text.slice(0,100)}; }
