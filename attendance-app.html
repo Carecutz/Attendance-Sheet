@@ -4,6 +4,11 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
 <title>Carewax Attendance</title>
+<link rel="manifest" href="manifest.json"/>
+<meta name="theme-color" content="#060d18"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="Carewax"/>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -454,6 +459,15 @@ async function removeStaff(id){
   if(!confirm("Remove this staff member?"))return;
   await api("removeStaff",{id});
   cache.staff=null;renderAdminStaff();
+}
+</script>
+<script>
+if("serviceWorker" in navigator){
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("sw.js").then(r => {
+      console.log("SW registered");
+    }).catch(e => console.log("SW error", e));
+  });
 }
 </script>
 </body>
