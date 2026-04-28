@@ -16,10 +16,10 @@
   --text:#f0f0f0;--muted:#8a9bb0;
   --green:#1a9e60;--green-bg:#0a2518;
   --red:#e05050;--red-bg:#2a0d0d;
-  --amber:#e0a020;--blue:#4a90d9;--blue-bg:#0a1830;
+  --blue:#4a90d9;--blue-bg:#0a1830;
   --radius:12px;--radius-sm:8px;
 }
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:15px}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:15px}
 .app{max-width:480px;margin:0 auto;min-height:100vh}
 .page{display:none}.page.active{display:block}
 .topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10}
@@ -178,16 +178,17 @@ input:focus,select:focus{border-color:var(--blue)}
     </div>
     <div style="display:flex;gap:8px">
       <button class="btn btn-sm" style="flex:1" onclick="closeEdit()">Cancel</button>
-      <button class="btn btn-sm btn-green" style="flex:1" onclick="saveEdit()">Save</button>
+      <button class="btn btn-sm btn-green" style="flex:1" id="save-edit-btn" onclick="saveEdit()">Save</button>
     </div>
   </div>
 </div>
 
 <script>
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw6uu_6jHgqNTg2NSFGKyIqf_y90aPLysm0xpCCVnCi0Xk4wWC-zQdfYTGIFhDnjKvYHA/exec";
+const DB = "https://carewax-attendance-default-rtdb.firebaseio.com";
+const ADMIN = {username:"Admin", password:"admin321"};
 const COLORS=[{bg:"#1a1060",c:"#a89ef0"},{bg:"#003520",c:"#50c88a"},{bg:"#3a0a00",c:"#f0856a"},{bg:"#3a0a20",c:"#f08ab0"},{bg:"#001a3a",c:"#70b0f0"},{bg:"#0a2500",c:"#80c850"},{bg:"#2a1400",c:"#d4884a"}];
-let currentUser=null,editTarget=null,cache={staff:null};
-window._todayRecs={};window._staffList=[];
+let currentUser=null, editTarget=null;
+let _staff=null, _todayRecs={}, _staffList=[];
 
 function todayStr(){const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
 function monthStr(o=0){const d=new Date();d.setMonth(d.getMonth()-o);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");}
@@ -197,45 +198,47 @@ function fmtDate(d){return new Date(d+"T00:00:00").toLocaleDateString("en-IN",{w
 function toTimeInput(t){if(!t)return"";try{const[hm,ap]=t.split(" ");let[h,m]=hm.split(":").map(Number);if(ap==="PM"&&h!==12)h+=12;if(ap==="AM"&&h===12)h=0;return String(h).padStart(2,"0")+":"+String(m).padStart(2,"0");}catch(e){return"";}}
 function fromTimeInput(t){if(!t)return"";const[h,m]=t.split(":").map(Number);const ap=h>=12?"PM":"AM";const h12=h%12||12;return String(h12).padStart(2,"0")+":"+String(m).padStart(2,"0")+" "+ap;}
 
-// Local cache with TTL
-const localCache={};
-function setCache(key,val,ttl=30000){localCache[key]={val,exp:Date.now()+ttl};}
-function getCache(key){const c=localCache[key];if(c&&c.exp>Date.now())return c.val;return null;}
-function clearCache(key){delete localCache[key];}
+// Firebase REST API — very fast!
+async function fbGet(path){
+  const res=await fetch(DB+path+".json");
+  return await res.json();
+}
+async function fbSet(path,data){
+  await fetch(DB+path+".json",{method:"PUT",body:JSON.stringify(data)});
+}
+async function fbPatch(path,data){
+  await fetch(DB+path+".json",{method:"PATCH",body:JSON.stringify(data)});
+}
+async function fbDelete(path){
+  await fetch(DB+path+".json",{method:"DELETE"});
+}
 
-// Prefetch all needed data right after login
-async function prefetchAll(user){
-  const today=todayStr();
-  const month=monthStr();
-  // Fetch in parallel
-  const promises=[
-    apiCached("getTodayAtt",{},30000),
-    apiCached("getStaff",{},300000),
-  ];
-  if(!user.isAdmin){
-    promises.push(apiCached("getStaffMonth",{month,uid:user.id},60000));
+async function getStaff(forceRefresh=false){
+  if(_staff&&!forceRefresh)return _staff;
+  // Check localStorage first
+  if(!forceRefresh){
+    const cached=localStorage.getItem("cw_staff");
+    if(cached){
+      try{
+        const parsed=JSON.parse(cached);
+        if(parsed.exp>Date.now()){
+          _staff=parsed.data;
+          // Refresh in background
+          fbGet("/staff").then(data=>{
+            if(data){
+              _staff=Object.values(data);
+              localStorage.setItem("cw_staff",JSON.stringify({data:_staff,exp:Date.now()+300000}));
+            }
+          });
+          return _staff;
+        }
+      }catch(e){}
+    }
   }
-  await Promise.all(promises);
-}
-
-async function api(action,data={}){
-  try{
-    const url=new URL(SCRIPT_URL);
-    url.searchParams.append("action",action);
-    Object.keys(data).forEach(k=>url.searchParams.append(k,typeof data[k]==="object"?JSON.stringify(data[k]):data[k]));
-    const res=await fetch(url.toString(),{redirect:"follow"});
-    const text=await res.text();
-    try{return JSON.parse(text);}catch(e){return{ok:false,error:"Parse error"};}
-  }catch(e){return{ok:false,error:"Network error"};}
-}
-
-async function apiCached(action,data={},ttl=30000){
-  const key=action+JSON.stringify(data);
-  const cached=getCache(key);
-  if(cached)return cached;
-  const res=await api(action,data);
-  if(res.ok)setCache(key,res,ttl);
-  return res;
+  const data=await fbGet("/staff");
+  _staff=data?Object.values(data):[];
+  localStorage.setItem("cw_staff",JSON.stringify({data:_staff,exp:Date.now()+300000}));
+  return _staff;
 }
 
 async function doLogin(){
@@ -244,19 +247,18 @@ async function doLogin(){
   const btn=document.getElementById("login-btn");
   document.getElementById("l-err").style.display="none";
   btn.textContent="Signing in...";btn.disabled=true;
-  const res=await api("login",{username:u,password:p});
-  btn.textContent="Sign in";btn.disabled=false;
-  if(res.ok){
-    currentUser=res.user;
-    cache={staff:null};
-    // Prefetch all data in background immediately after login
-    prefetchAll(res.user);
-    if(res.user.isAdmin){showPage("page-admin");initAdmin();}
-    else{showPage("page-staff");initStaff();}
+  if(u===ADMIN.username&&p===ADMIN.password){
+    currentUser={isAdmin:true,name:"Admin"};
+    btn.textContent="Sign in";btn.disabled=false;
+    showPage("page-admin");initAdmin();return;
   }
+  const staff=await getStaff();
+  const found=staff.find(x=>x.username===u&&x.password===p);
+  btn.textContent="Sign in";btn.disabled=false;
+  if(found){currentUser=found;showPage("page-staff");initStaff();}
   else{document.getElementById("l-err").style.display="block";}
 }
-function doLogout(){currentUser=null;cache={};document.getElementById("l-user").value="";document.getElementById("l-pass").value="";showPage("page-login");}
+function doLogout(){currentUser=null;_staff=null;_todayRecs={};document.getElementById("l-user").value="";document.getElementById("l-pass").value="";showPage("page-login");}
 function showPage(id){document.querySelectorAll(".page").forEach(p=>p.classList.remove("active"));document.getElementById(id).classList.add("active");}
 
 async function initStaff(){
@@ -265,13 +267,35 @@ async function initStaff(){
   renderStaffToday();renderStaffMonth();
 }
 async function renderStaffToday(){
-  const res=await apiCached("getTodayAtt",{},10000);
-  const rec=(res.records||{})[currentUser.id]||{};
+  const today=todayStr();
+  const dateKey=today.replace(/-/g,"");
+  // Check localStorage cache (30 sec TTL)
+  let rec={};
+  const cacheKey="cw_att_"+dateKey+"_"+currentUser.id;
+  const cached=localStorage.getItem(cacheKey);
+  if(cached){
+    try{
+      const parsed=JSON.parse(cached);
+      if(parsed.exp>Date.now()){
+        rec=parsed.data;
+        // Refresh in background
+        fbGet("/attendance/"+dateKey+"/"+currentUser.id).then(fresh=>{
+          if(fresh){localStorage.setItem(cacheKey,JSON.stringify({data:fresh,exp:Date.now()+30000}));}
+        });
+      } else {
+        rec=await fbGet("/attendance/"+dateKey+"/"+currentUser.id)||{};
+        localStorage.setItem(cacheKey,JSON.stringify({data:rec,exp:Date.now()+30000}));
+      }
+    }catch(e){rec=await fbGet("/attendance/"+dateKey+"/"+currentUser.id)||{};}
+  } else {
+    rec=await fbGet("/attendance/"+dateKey+"/"+currentUser.id)||{};
+    localStorage.setItem(cacheKey,JSON.stringify({data:rec,exp:Date.now()+30000}));
+  }
   const col=COLORS[(currentUser.id-1)%COLORS.length];
   let html=`<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
     <div class="avatar" style="background:${col.bg};color:${col.c}">${initials(currentUser.name)}</div>
     <div><div style="font-weight:600">${currentUser.name}</div><div style="font-size:12px;color:var(--muted)">${currentUser.role}</div></div></div>`;
-  html+='<div class="slot-grid">';
+  html+="<div class="slot-grid">";
   ["morning","evening"].forEach(slot=>{
     const marked=rec[slot];
     const label=slot==="morning"?"Morning In":"Evening Out";
@@ -285,27 +309,26 @@ async function renderStaffToday(){
   document.getElementById("s-today").innerHTML=html;
 }
 async function staffMark(slot){
-  // Optimistic update — show immediately
+  const today=todayStr();
   const t=getTime();
-  const cacheKey='getTodayAtt{}';
-  const cached=getCache(cacheKey)||{ok:true,records:{}};
-  if(!cached.records)cached.records={};
-  if(!cached.records[currentUser.id])cached.records[currentUser.id]={};
-  const rec=cached.records[currentUser.id];
-  if(rec[slot]||rec.absent)return;
-  rec[slot]=t;
-  setCache(cacheKey,cached,10000);
-  renderStaffToday();
-  // Save in background
-  api("markAtt",{date:todayStr(),uid:currentUser.id,slot,time:t}).then(r=>{
-    clearCache(cacheKey);
-    renderStaffMonth();
-  });
+  // Optimistic update
+  const col=COLORS[(currentUser.id-1)%COLORS.length];
+  document.querySelector(`[onclick="staffMark('${slot}')"]`).textContent="Saving...";
+  const dateKey2=today.replace(/-/g,"");
+  await fbPatch("/attendance/"+dateKey2+"/"+currentUser.id,{[slot]:t,absent:false});
+  localStorage.removeItem("cw_att_"+dateKey2+"_"+currentUser.id);
+  renderStaffToday();renderStaffMonth();
 }
 async function renderStaffMonth(){
-  const mk=monthStr();
-  const res=await apiCached("getStaffMonth",{month:mk,uid:currentUser.id},60000);
-  const present=res.present||0,days=res.days||0,absent=days-present;
+  const mk=monthStr().replace("-","");
+  const data=await fbGet("/attendance")||{};
+  let present=0,days=0;
+  Object.keys(data).filter(k=>k.startsWith(mk)).forEach(k=>{
+    days++;
+    const r=data[k][currentUser.id]||{};
+    if(!r.absent&&(r.morning||r.evening))present++;
+  });
+  const absent=days-present;
   document.getElementById("s-month").innerHTML=`
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;text-align:center">
       <div><div style="font-size:26px;font-weight:700;color:var(--green)">${present}</div><div style="font-size:12px;color:var(--muted)">Present</div></div>
@@ -323,22 +346,14 @@ function aTab(tab,el){
   ["today","report","staff"].forEach(t=>{document.getElementById("a-"+t).style.display=t===tab?"block":"none";});
   if(tab==="today")renderAdminToday();
   if(tab==="staff")renderAdminStaff();
-  if(tab==="report"){
-    populateMonths();
-    // Auto-load current month report
-    setTimeout(()=>loadReport(),100);
-  }
+  if(tab==="report"){populateMonths();setTimeout(()=>loadReport(),100);}
 }
 async function renderAdminToday(){
   document.getElementById("a-stats").innerHTML=`<div class="loading" style="grid-column:1/-1"><div class="spinner"></div></div>`;
-  const[sr,ar]=await Promise.all([
-    cache.staff?Promise.resolve({ok:true,staff:cache.staff}):apiCached("getStaff",{},300000),
-    apiCached("getTodayAtt",{},10000)
-  ]);
-  if(sr.ok)cache.staff=sr.staff;
-  const staff=cache.staff||[];
-  const recs=ar.records||{};
-  window._todayRecs=recs;window._staffList=staff;
+  const today=todayStr();
+  const[staff,attData]=await Promise.all([getStaff(),fbGet("/attendance/"+today.replace(/-/g,""))]);
+  const recs=attData||{};
+  _todayRecs=recs;_staffList=staff;
   let cP=0,cA=0,cH=0;
   staff.forEach(u=>{
     const r=recs[u.id]||{};
@@ -368,7 +383,7 @@ async function renderAdminToday(){
           ${r.evening?`<span style="font-size:11px;color:var(--muted)">PM:${r.evening}</span>`:""}
         </div>
         <div style="margin-top:8px">
-          <button class="btn btn-sm" onclick="openEdit(${u.id})" style="font-size:12px">Edit</button>
+          <button class="btn btn-sm" onclick="openEdit(${u.id})">Edit</button>
         </div>
       </div>
     </div>`;
@@ -376,8 +391,8 @@ async function renderAdminToday(){
   document.getElementById("a-list").innerHTML=html;
 }
 function openEdit(uid){
-  const u=window._staffList.find(x=>x.id==uid);
-  const r=window._todayRecs[uid]||{};
+  const u=_staffList.find(x=>x.id==uid);
+  const r=_todayRecs[uid]||{};
   if(!u)return;
   editTarget={uid,date:todayStr()};
   document.getElementById("edit-name").textContent=u.name+" — "+fmtDate(todayStr());
@@ -392,16 +407,16 @@ async function saveEdit(){
   const morning=fromTimeInput(document.getElementById("edit-morning").value);
   const evening=fromTimeInput(document.getElementById("edit-evening").value);
   const absent=document.getElementById("edit-absent").checked;
-  const btn=document.querySelector("#edit-modal .btn-green");
+  const btn=document.getElementById("save-edit-btn");
   btn.textContent="Saving...";btn.disabled=true;
-  if(absent){await api("markAbsent",{date:editTarget.date,uid:editTarget.uid});}
-  else{
-    if(morning)await api("markAtt",{date:editTarget.date,uid:editTarget.uid,slot:"morning",time:morning});
-    if(evening)await api("markAtt",{date:editTarget.date,uid:editTarget.uid,slot:"evening",time:evening});
-    if(!morning&&!evening)await api("clearAtt",{date:editTarget.date,uid:editTarget.uid});
+  const dateKey=editTarget.date.replace(/-/g,"");
+  if(absent){
+    await fbPatch("/attendance/"+dateKey+"/"+editTarget.uid,{morning:"",evening:"",absent:true});
+  } else {
+    await fbPatch("/attendance/"+dateKey+"/"+editTarget.uid,{morning:morning||"",evening:evening||"",absent:false});
   }
   btn.textContent="Save";btn.disabled=false;
-  Object.keys(localCache).forEach(k=>{if(k.startsWith("getTodayAtt"))delete localCache[k];});closeEdit();renderAdminToday();
+  closeEdit();renderAdminToday();
 }
 
 function populateMonths(){
@@ -414,35 +429,30 @@ function populateMonths(){
   }
 }
 async function loadReport(){
-  const mk=document.getElementById("r-month").value;
+  const mk=document.getElementById("r-month").value.replace("-","");
   document.getElementById("r-area").innerHTML=`<div class="loading"><div class="spinner"></div>Loading...</div>`;
-  const[sr,rr]=await Promise.all([
-    cache.staff?Promise.resolve({ok:true,staff:cache.staff}):apiCached("getStaff",{},300000),
-    api("getMonthReport",{month:mk})
-  ]);
-  if(sr.ok)cache.staff=sr.staff;
-  const staff=cache.staff||[];
-  const recs=rr.records||{};
-  const[yr,mo]=mk.split("-").map(Number);
+  const[staff,allAtt]=await Promise.all([getStaff(),fbGet("/attendance")]);
+  const attData=allAtt||{};
+  const yr=parseInt(mk.slice(0,4)),mo=parseInt(mk.slice(4,6));
   const dim=new Date(yr,mo,0).getDate();
   const days=[];
-  for(let d=1;d<=dim;d++)days.push(yr+"-"+String(mo).padStart(2,"0")+"-"+String(d).padStart(2,"0"));
+  for(let d=1;d<=dim;d++)days.push(mk+String(d).padStart(2,"0"));
   let html=`<div class="report-scroll"><table class="rtable"><thead><tr><th>Name</th>`;
   days.forEach(d=>{
-    const dd=parseInt(d.split("-")[2]);
-    const isHol=new Date(d+"T00:00:00").getDay()===0;
-    html+=`<th style="${isHol?"color:var(--red)":""}">${dd}</th>`;
+    const dd=parseInt(d.slice(6,8));
+    const date=new Date(d.slice(0,4)+"-"+d.slice(4,6)+"-"+d.slice(6,8)+"T00:00:00");
+    html+=`<th style="${date.getDay()===0?"color:var(--red)":""}">${dd}</th>`;
   });
   html+="<th>P</th><th>A</th></tr></thead><tbody>";
   staff.forEach(u=>{
     html+=`<tr><td>${u.name.split(" ")[0]}</td>`;
     let tp=0,ta=0;
     days.forEach(dk=>{
-      const r=(recs[dk]||{})[u.id];
+      const r=(attData[dk]||{})[u.id]||{};
       let sym="-",cls="ra";
-      if(r&&r.absent){sym="A";cls="ra";ta++;}
-      else if(r&&r.morning&&r.evening){sym="P";cls="rp";tp++;}
-      else if(r&&(r.morning||r.evening)){sym="H";cls="rh";tp+=0.5;ta+=0.5;}
+      if(r.absent){sym="A";cls="ra";ta++;}
+      else if(r.morning&&r.evening){sym="P";cls="rp";tp++;}
+      else if(r.morning||r.evening){sym="H";cls="rh";tp+=0.5;ta+=0.5;}
       else{ta++;}
       html+=`<td class="${cls}">${sym}</td>`;
     });
@@ -453,9 +463,7 @@ async function loadReport(){
 }
 
 async function renderAdminStaff(){
-  const res=cache.staff?{ok:true,staff:cache.staff}:await api("getStaff");
-  if(res.ok)cache.staff=res.staff;
-  const staff=res.staff||[];
+  const staff=await getStaff();
   let html="";
   staff.forEach((u,i)=>{
     const col=COLORS[i%COLORS.length];
@@ -465,7 +473,7 @@ async function renderAdminStaff(){
         <div class="srow-name">${u.name}</div>
         <div style="font-size:12px;color:var(--muted)">${u.role} · @${u.username}</div>
       </div>
-      <button class="btn btn-sm btn-danger" onclick="removeStaff(${u.id})">Remove</button>
+      <button class="btn btn-sm btn-danger" onclick="removeStaff('${u.id}')">Remove</button>
     </div>`;
   });
   document.getElementById("a-staff-list").innerHTML=html||`<div style="text-align:center;padding:20px;color:var(--muted)">No staff added</div>`;
@@ -477,23 +485,24 @@ async function addStaff(){
   const password=document.getElementById("ns-pass").value.trim();
   const err=document.getElementById("ns-err");
   if(!name||!role||!username||!password){err.textContent="All fields required";err.style.display="block";return;}
+  const staff=await getStaff();
+  if(staff.find(u=>u.username===username)){err.textContent="Username already exists";err.style.display="block";return;}
   err.style.display="none";
-  const res=await api("addStaff",{name,role,username,password});
-  if(!res.ok){err.textContent=res.error||"Error adding staff";err.style.display="block";return;}
-  cache.staff=null;clearCache("getStaff{}");["ns-name","ns-role","ns-user","ns-pass"].forEach(id=>document.getElementById(id).value="");renderAdminStaff();
+  const newId=staff.length?Math.max(...staff.map(u=>Number(u.id)))+1:1;
+  await fbSet("/staff/"+newId,{id:newId,name,role,username,password});
+  _staff=null;
+  ["ns-name","ns-role","ns-user","ns-pass"].forEach(id=>document.getElementById(id).value="");
+  renderAdminStaff();
 }
 async function removeStaff(id){
   if(!confirm("Remove this staff member?"))return;
-  await api("removeStaff",{id});
-  cache.staff=null;renderAdminStaff();
+  await fbDelete("/staff/"+id);
+  _staff=null;renderAdminStaff();
 }
-</script>
-<script>
+
 if("serviceWorker" in navigator){
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js").then(r => {
-      console.log("SW registered");
-    }).catch(e => console.log("SW error", e));
+  window.addEventListener("load",()=>{
+    navigator.serviceWorker.register("sw.js").catch(e=>console.log("SW error",e));
   });
 }
 </script>
