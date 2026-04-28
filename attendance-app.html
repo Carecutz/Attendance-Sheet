@@ -203,6 +203,21 @@ function setCache(key,val,ttl=30000){localCache[key]={val,exp:Date.now()+ttl};}
 function getCache(key){const c=localCache[key];if(c&&c.exp>Date.now())return c.val;return null;}
 function clearCache(key){delete localCache[key];}
 
+// Prefetch all needed data right after login
+async function prefetchAll(user){
+  const today=todayStr();
+  const month=monthStr();
+  // Fetch in parallel
+  const promises=[
+    apiCached("getTodayAtt",{},30000),
+    apiCached("getStaff",{},300000),
+  ];
+  if(!user.isAdmin){
+    promises.push(apiCached("getStaffMonth",{month,uid:user.id},60000));
+  }
+  await Promise.all(promises);
+}
+
 async function api(action,data={}){
   try{
     const url=new URL(SCRIPT_URL);
@@ -231,7 +246,14 @@ async function doLogin(){
   btn.textContent="Signing in...";btn.disabled=true;
   const res=await api("login",{username:u,password:p});
   btn.textContent="Sign in";btn.disabled=false;
-  if(res.ok){currentUser=res.user;cache={staff:null};if(res.user.isAdmin){showPage("page-admin");initAdmin();}else{showPage("page-staff");initStaff();}}
+  if(res.ok){
+    currentUser=res.user;
+    cache={staff:null};
+    // Prefetch all data in background immediately after login
+    prefetchAll(res.user);
+    if(res.user.isAdmin){showPage("page-admin");initAdmin();}
+    else{showPage("page-staff");initStaff();}
+  }
   else{document.getElementById("l-err").style.display="block";}
 }
 function doLogout(){currentUser=null;cache={};document.getElementById("l-user").value="";document.getElementById("l-pass").value="";showPage("page-login");}
@@ -301,6 +323,11 @@ function aTab(tab,el){
   ["today","report","staff"].forEach(t=>{document.getElementById("a-"+t).style.display=t===tab?"block":"none";});
   if(tab==="today")renderAdminToday();
   if(tab==="staff")renderAdminStaff();
+  if(tab==="report"){
+    populateMonths();
+    // Auto-load current month report
+    setTimeout(()=>loadReport(),100);
+  }
 }
 async function renderAdminToday(){
   document.getElementById("a-stats").innerHTML=`<div class="loading" style="grid-column:1/-1"><div class="spinner"></div></div>`;
