@@ -244,27 +244,51 @@ async function getStaff(forceRefresh=false){
 async function doLogin(){
   const u=document.getElementById("l-user").value.trim();
   const p=document.getElementById("l-pass").value.trim();
+  const errEl=document.getElementById("l-err");
   const btn=document.getElementById("login-btn");
-  document.getElementById("l-err").style.display="none";
+  errEl.style.display="none";
+  if(!u||!p){errEl.textContent="Please enter username and password";errEl.style.display="block";return;}
   btn.textContent="Signing in...";btn.disabled=true;
   if(u===ADMIN.username&&p===ADMIN.password){
     currentUser={isAdmin:true,name:"Admin"};
     btn.textContent="Sign in";btn.disabled=false;
     showPage("page-admin");initAdmin();return;
   }
-  // Always fetch fresh from Firebase on login — skip localStorage cache
+  // Fetch from Firebase with timeout
   try {
-    const data=await fbGet("/staff");
+    const controller=new AbortController();
+    const timeout=setTimeout(()=>controller.abort(),8000);
+    const res=await fetch(DB+"/staff.json",{signal:controller.signal});
+    clearTimeout(timeout);
+    if(!res.ok){throw new Error("Firebase error: "+res.status);}
+    const data=await res.json();
     _staff=data?Object.values(data):[];
     localStorage.setItem("cw_staff",JSON.stringify({data:_staff,exp:Date.now()+300000}));
   } catch(e) {
-    // fallback to cache if network fails
-    _staff=await getStaff();
+    console.error("Firebase fetch error:",e);
+    // Try localStorage cache as fallback
+    try{
+      const cached=localStorage.getItem("cw_staff");
+      if(cached){
+        const parsed=JSON.parse(cached);
+        _staff=parsed.data||[];
+      } else {
+        btn.textContent="Sign in";btn.disabled=false;
+        errEl.textContent="Cannot connect to server. Check your internet connection.";
+        errEl.style.display="block";
+        return;
+      }
+    }catch(e2){
+      btn.textContent="Sign in";btn.disabled=false;
+      errEl.textContent="Connection failed. Please try again.";
+      errEl.style.display="block";
+      return;
+    }
   }
   const found=_staff.find(x=>x.username===u&&x.password===p);
   btn.textContent="Sign in";btn.disabled=false;
   if(found){currentUser=found;showPage("page-staff");initStaff();}
-  else{document.getElementById("l-err").style.display="block";}
+  else{errEl.textContent="Incorrect username or password";errEl.style.display="block";}
 }
 function doLogout(){currentUser=null;_staff=null;_todayRecs={};document.getElementById("l-user").value="";document.getElementById("l-pass").value="";showPage("page-login");}
 function showPage(id){document.querySelectorAll(".page").forEach(p=>p.classList.remove("active"));document.getElementById(id).classList.add("active");}
