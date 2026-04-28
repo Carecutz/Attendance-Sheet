@@ -252,8 +252,16 @@ async function doLogin(){
     btn.textContent="Sign in";btn.disabled=false;
     showPage("page-admin");initAdmin();return;
   }
-  const staff=await getStaff();
-  const found=staff.find(x=>x.username===u&&x.password===p);
+  // Always fetch fresh from Firebase on login — skip localStorage cache
+  try {
+    const data=await fbGet("/staff");
+    _staff=data?Object.values(data):[];
+    localStorage.setItem("cw_staff",JSON.stringify({data:_staff,exp:Date.now()+300000}));
+  } catch(e) {
+    // fallback to cache if network fails
+    _staff=await getStaff();
+  }
+  const found=_staff.find(x=>x.username===u&&x.password===p);
   btn.textContent="Sign in";btn.disabled=false;
   if(found){currentUser=found;showPage("page-staff");initStaff();}
   else{document.getElementById("l-err").style.display="block";}
