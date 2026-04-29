@@ -213,9 +213,14 @@ async function fbDelete(path){
   await fetch(DB+path+".json",{method:"DELETE"});
 }
 
+function parseStaff(data){
+  if(!data) return [];
+  if(Array.isArray(data)) return data.filter(x=>x!=null);
+  return Object.values(data).filter(x=>x!=null);
+}
+
 async function getStaff(forceRefresh=false){
   if(_staff&&!forceRefresh)return _staff;
-  // Check localStorage first
   if(!forceRefresh){
     const cached=localStorage.getItem("cw_staff");
     if(cached){
@@ -223,10 +228,9 @@ async function getStaff(forceRefresh=false){
         const parsed=JSON.parse(cached);
         if(parsed.exp>Date.now()){
           _staff=parsed.data;
-          // Refresh in background
           fbGet("/staff").then(data=>{
             if(data){
-              _staff=Object.values(data);
+              _staff=parseStaff(data);
               localStorage.setItem("cw_staff",JSON.stringify({data:_staff,exp:Date.now()+300000}));
             }
           });
@@ -236,7 +240,7 @@ async function getStaff(forceRefresh=false){
     }
   }
   const data=await fbGet("/staff");
-  _staff=data?Object.values(data):[];
+  _staff=parseStaff(data);
   localStorage.setItem("cw_staff",JSON.stringify({data:_staff,exp:Date.now()+300000}));
   return _staff;
 }
