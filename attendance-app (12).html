@@ -252,16 +252,8 @@ async function doLogin(){
     btn.textContent="Sign in";btn.disabled=false;
     showPage("page-admin");initAdmin();return;
   }
-  // Always fetch fresh from Firebase on login — skip localStorage cache
-  try {
-    const data=await fbGet("/staff");
-    _staff=data?Object.values(data):[];
-    localStorage.setItem("cw_staff",JSON.stringify({data:_staff,exp:Date.now()+300000}));
-  } catch(e) {
-    // fallback to cache if network fails
-    _staff=await getStaff();
-  }
-  const found=_staff.find(x=>x.username===u&&x.password===p);
+  const staff=await getStaff();
+  const found=staff.find(x=>x.username===u&&x.password===p);
   btn.textContent="Sign in";btn.disabled=false;
   if(found){currentUser=found;showPage("page-staff");initStaff();}
   else{document.getElementById("l-err").style.display="block";}
@@ -303,7 +295,7 @@ async function renderStaffToday(){
   let html=`<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
     <div class="avatar" style="background:${col.bg};color:${col.c}">${initials(currentUser.name)}</div>
     <div><div style="font-weight:600">${currentUser.name}</div><div style="font-size:12px;color:var(--muted)">${currentUser.role}</div></div></div>`;
-  html+='<div class="slot-grid">';
+  html+="<div class="slot-grid">";
   ["morning","evening"].forEach(slot=>{
     const marked=rec[slot];
     const label=slot==="morning"?"Morning In":"Evening Out";
@@ -319,9 +311,6 @@ async function renderStaffToday(){
 async function staffMark(slot){
   const today=todayStr();
   const t=getTime();
-  // Optimistic update
-  const col=COLORS[(currentUser.id-1)%COLORS.length];
-  document.querySelector(`[onclick="staffMark('${slot}')"]`).textContent="Saving...";
   const dateKey2=today.replace(/-/g,"");
   await fbPatch("/attendance/"+dateKey2+"/"+currentUser.id,{[slot]:t,absent:false});
   localStorage.removeItem("cw_att_"+dateKey2+"_"+currentUser.id);
