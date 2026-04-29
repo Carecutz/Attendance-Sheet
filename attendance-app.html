@@ -301,13 +301,14 @@ async function renderStaffToday(){
     html+='<div class="slot-card"><div class="slot-title">'+label+'</div>';
     if(rec.absent){html+='<span class="badge badge-a">Absent</span>';}
     else if(marked){html+='<div class="slot-time">'+marked+'</div><span class="badge badge-p">Marked</span>';}
-    else{html+='<button class="btn btn-green btn-sm btn-block" onclick="staffMark(''+slot+'')">Mark now</button>';}
+    else{html+='<button class="btn btn-green btn-sm btn-block" onclick="staffMark(this.dataset.slot)" data-slot="'+slot+'">Mark now</button>';}
     html+='</div>';
   });
   html+='</div>';
   document.getElementById("s-today").innerHTML=html;
 }
-async function staffMark(slot){
+async function staffMark(elOrSlot){
+  const slot=typeof elOrSlot==="string"?elOrSlot:elOrSlot.dataset.slot;
   const today=todayStr();
   const t=getTime();
   const dateKey2=today.replace(/-/g,"");
