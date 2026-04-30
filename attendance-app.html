@@ -142,7 +142,7 @@ input:focus,select:focus{border-color:var(--blue)}
         <button class="btn btn-sm btn-green" onclick="loadReport()">View</button>
       </div>
       <div id="r-area"></div>
-      <div style="margin-top:8px;font-size:11px;color:var(--muted)">P=Present &nbsp;H=Half day &nbsp;A=Absent</div>
+      <div style="margin-top:8px;font-size:11px;color:var(--muted)">P=Present &nbsp;H=Half day &nbsp;A=Absent &nbsp;|&nbsp; Hover on cell for time details</div>
     </div>
     <div id="a-staff" style="display:none">
       <div class="sec-label">Add New Staff</div>
@@ -431,35 +431,86 @@ function populateMonths(){
 }
 async function loadReport(){
   const mk=document.getElementById("r-month").value.replace("-","");
-  document.getElementById("r-area").innerHTML=`<div class="loading"><div class="spinner"></div>Loading...</div>`;
+  document.getElementById("r-area").innerHTML='<div class="loading"><div class="spinner"></div>Loading...</div>';
   const[staff,allAtt]=await Promise.all([getStaff(),fbGet("/attendance")]);
   const attData=allAtt||{};
   const yr=parseInt(mk.slice(0,4)),mo=parseInt(mk.slice(4,6));
   const dim=new Date(yr,mo,0).getDate();
   const days=[];
   for(let d=1;d<=dim;d++)days.push(mk+String(d).padStart(2,"0"));
-  let html=`<div class="report-scroll"><table class="rtable"><thead><tr><th>Name</th>`;
-  days.forEach(d=>{
+
+  // Summary table
+  let html='<div class="report-scroll"><table class="rtable"><thead><tr><th>Name</th>';
+  days.forEach(function(d){
     const dd=parseInt(d.slice(6,8));
     const date=new Date(d.slice(0,4)+"-"+d.slice(4,6)+"-"+d.slice(6,8)+"T00:00:00");
-    html+=`<th style="${date.getDay()===0?"color:var(--red)":""}">${dd}</th>`;
+    const isSun=date.getDay()===0;
+    html+='<th style="'+(isSun?"color:var(--red)":"")+'">'+dd+'</th>';
   });
-  html+="<th>P</th><th>A</th></tr></thead><tbody>";
-  staff.forEach(u=>{
-    html+=`<tr><td>${u.name.split(" ")[0]}</td>`;
-    let tp=0,ta=0;
-    days.forEach(dk=>{
+  html+='<th style="color:var(--green)">P</th><th style="color:var(--blue)">H</th><th style="color:var(--red)">A</th></tr></thead><tbody>';
+
+  staff.forEach(function(u){
+    html+='<tr><td>'+u.name.split(" ")[0]+'</td>';
+    let tp=0,th=0,ta=0;
+    days.forEach(function(dk){
       const r=(attData[dk]||{})[u.id]||{};
-      let sym="-",cls="ra";
-      if(r.absent){sym="A";cls="ra";ta++;}
-      else if(r.morning&&r.evening){sym="P";cls="rp";tp++;}
-      else if(r.morning||r.evening){sym="H";cls="rh";tp+=0.5;ta+=0.5;}
-      else{ta++;}
-      html+=`<td class="${cls}">${sym}</td>`;
+      let sym="-",cls="ra",title="";
+      if(r.absent){sym="A";cls="ra";ta++;title="Absent";}
+      else if(r.morning&&r.evening){sym="P";cls="rp";tp++;title="In:"+r.morning+" Out:"+r.evening;}
+      else if(r.morning){sym="H";cls="rh";th++;title="In:"+r.morning+" (no out)";}
+      else if(r.evening){sym="H";cls="rh";th++;title="(no in) Out:"+r.evening;}
+      else{ta++;title="Absent";}
+      html+='<td class="'+cls+'" title="'+title+'">'+sym+'</td>';
     });
-    html+=`<td style="font-weight:700;color:var(--green)">${tp}</td><td style="font-weight:700;color:var(--red)">${ta}</td></tr>`;
+    html+='<td style="font-weight:700;color:var(--green)">'+tp+'</td>';
+    html+='<td style="font-weight:700;color:var(--blue)">'+th+'</td>';
+    html+='<td style="font-weight:700;color:var(--red)">'+ta+'</td></tr>';
   });
-  html+="</tbody></table></div>";
+  html+='</tbody></table></div>';
+
+  // Detailed view per staff
+  html+='<div style="margin-top:20px">';
+  html+='<div class="sec-label">Detailed View</div>';
+  staff.forEach(function(u){
+    let tp=0,th=0,ta=0;
+    const detailRows=[];
+    days.forEach(function(dk){
+      const r=(attData[dk]||{})[u.id]||{};
+      const dateStr=dk.slice(0,4)+"-"+dk.slice(4,6)+"-"+dk.slice(6,8);
+      const dayName=new Date(dateStr+"T00:00:00").toLocaleDateString("en-IN",{weekday:"short",day:"numeric",month:"short"});
+      let status="Absent",statusCls="badge-a",timeInfo="";
+      if(r.absent){ta++;}
+      else if(r.morning&&r.evening){status="Present";statusCls="badge-p";tp++;timeInfo="In: "+r.morning+" &nbsp; Out: "+r.evening;}
+      else if(r.morning){status="Half Day";statusCls="badge-h";th++;timeInfo="In: "+r.morning;}
+      else if(r.evening){status="Half Day";statusCls="badge-h";th++;timeInfo="Out: "+r.evening;}
+      else{ta++;}
+      if(status!=="Absent"){
+        detailRows.push('<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px">'
+          +'<span style="color:var(--muted);min-width:90px">'+dayName+'</span>'
+          +'<span class="badge '+statusCls+'" style="font-size:10px">'+status+'</span>'
+          +'<span style="color:var(--muted);font-size:12px">'+timeInfo+'</span>'
+          +'</div>');
+      }
+    });
+    const col=COLORS[(u.id-1)%COLORS.length];
+    html+='<div class="card" style="margin-bottom:8px">';
+    html+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">';
+    html+='<div class="avatar" style="background:'+col.bg+';color:'+col.c+';width:32px;height:32px;font-size:11px">'+initials(u.name)+'</div>';
+    html+='<div style="flex:1"><div style="font-weight:600">'+u.name+'</div>';
+    html+='<div style="font-size:12px;color:var(--muted);margin-top:2px">'
+      +'<span style="color:var(--green)">P:'+tp+'</span> &nbsp;'
+      +'<span style="color:var(--blue)">H:'+th+'</span> &nbsp;'
+      +'<span style="color:var(--red)">A:'+ta+'</span>'
+      +'</div></div></div>';
+    if(detailRows.length>0){
+      html+=detailRows.join('');
+    } else {
+      html+='<div style="font-size:13px;color:var(--muted);text-align:center;padding:8px">No attendance marked this month</div>';
+    }
+    html+='</div>';
+  });
+  html+='</div>';
+
   document.getElementById("r-area").innerHTML=html;
 }
 
