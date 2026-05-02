@@ -167,7 +167,9 @@ input:focus,select:focus{border-color:var(--blue)}
 <div id="edit-modal" style="display:none" class="modal-overlay">
   <div class="modal">
     <div class="modal-title">Edit Attendance</div>
-    <div id="edit-name" style="color:var(--muted);font-size:13px;margin-bottom:14px"></div>
+    <div id="edit-name" style="color:var(--muted);font-size:13px;margin-bottom:10px"></div>
+    <label class="field-label">Date</label>
+    <input type="date" id="edit-date" style="margin-bottom:10px"/>
     <label class="field-label">Morning Time</label>
     <input type="time" id="edit-morning"/>
     <label class="field-label">Evening Time</label>
@@ -396,10 +398,21 @@ function openEdit(uid){
   const r=_todayRecs[uid]||{};
   if(!u)return;
   editTarget={uid,date:todayStr()};
-  document.getElementById("edit-name").textContent=u.name+" — "+fmtDate(todayStr());
+  document.getElementById("edit-name").textContent=u.name;
+  document.getElementById("edit-date").value=todayStr();
   document.getElementById("edit-morning").value=toTimeInput(r.morning||"");
   document.getElementById("edit-evening").value=toTimeInput(r.evening||"");
   document.getElementById("edit-absent").checked=r.absent||false;
+  // When date changes, load that day's data
+  document.getElementById("edit-date").onchange=async function(){
+    const newDate=this.value;
+    editTarget.date=newDate;
+    const dateKey=newDate.replace(/-/g,"");
+    const rec=await fbGet("/attendance/"+dateKey+"/"+uid)||{};
+    document.getElementById("edit-morning").value=toTimeInput(rec.morning||"");
+    document.getElementById("edit-evening").value=toTimeInput(rec.evening||"");
+    document.getElementById("edit-absent").checked=rec.absent||false;
+  };
   document.getElementById("edit-modal").style.display="flex";
 }
 function closeEdit(){document.getElementById("edit-modal").style.display="none";editTarget=null;}
