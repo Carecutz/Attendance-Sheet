@@ -271,6 +271,67 @@ async function initStaff(){
   document.getElementById("s-welcome").textContent="Hello, "+currentUser.name.split(" ")[0];
   document.getElementById("s-date").textContent=fmtDate(todayStr());
   renderStaffToday();renderStaffMonth();
+  setupNotifications();
+}
+
+async function setupNotifications(){
+  if(!("Notification" in window)) return;
+  if(Notification.permission==="default"){
+    await Notification.requestPermission();
+  }
+  scheduleAlerts();
+}
+
+function scheduleAlerts(){
+  if(Notification.permission!=="granted") return;
+  // Clear existing timers
+  if(window._alertTimers){window._alertTimers.forEach(t=>clearTimeout(t));} 
+  window._alertTimers=[];
+
+  const now=new Date();
+  const today=todayStr();
+
+  // Morning alert — 9:40 AM
+  const morning=new Date();
+  morning.setHours(9,40,0,0);
+  const msToMorning=morning-now;
+
+  // Evening alert — 5:00 PM
+  const evening=new Date();
+  evening.setHours(17,0,0,0);
+  const msToEvening=evening-now;
+
+  if(msToMorning>0){
+    const t1=setTimeout(async function(){
+      const dateKey=today.replace(/-/g,"");
+      const rec=await fbGet("/attendance/"+dateKey+"/"+currentUser.id)||{};
+      if(!rec.morning&&!rec.absent){
+        new Notification("Carewax Attendance", {
+          body: "Good morning "+currentUser.name.split(" ")[0]+"! Please mark your morning attendance.",
+          icon: "icon-192.png",
+          badge: "icon-192.png",
+          tag: "morning-alert"
+        });
+      }
+    }, msToMorning);
+    window._alertTimers.push(t1);
+  }
+
+  if(msToEvening>0){
+    const t2=setTimeout(async function(){
+      const dateKey=today.replace(/-/g,"");
+      const rec=await fbGet("/attendance/"+dateKey+"/"+currentUser.id)||{};
+      if(!rec.evening&&!rec.absent){
+        new Notification("Carewax Attendance", {
+          body: currentUser.name.split(" ")[0]+", please mark your evening attendance before leaving!",
+          icon: "icon-192.png",
+          badge: "icon-192.png",
+          tag: "evening-alert"
+        });
+      }
+    }, msToEvening);
+    window._alertTimers.push(t2);
+  }
 }
 async function renderStaffToday(){
   const today=todayStr();
