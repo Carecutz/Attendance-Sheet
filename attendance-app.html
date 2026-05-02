@@ -114,6 +114,8 @@ input:focus,select:focus{border-color:var(--blue)}
     <div class="card" id="s-today"><div class="loading"><div class="spinner"></div>Loading...</div></div>
     <div class="sec-label">This Month</div>
     <div class="card" id="s-month"><div class="loading"><div class="spinner"></div>Loading...</div></div>
+    <div class="sec-label">My Salary</div>
+    <div class="card" id="s-salary"><div class="loading"><div class="spinner"></div>Loading...</div></div>
     <div class="sec-label">Request Leave</div>
     <div class="card">
       <label class="field-label">Date</label>
@@ -301,7 +303,7 @@ async function initStaff(){
   // Set default leave date to today
   const ld=document.getElementById("leave-date");
   if(ld)ld.value=todayStr();
-  renderStaffToday();renderStaffMonth();loadMyLeaves();
+  renderStaffToday();renderStaffMonth();loadMyLeaves();loadMySalary();
   setupNotifications();
 }
 
@@ -745,6 +747,48 @@ async function loadSalary(){
 }
 
 // Leave functions
+async function loadMySalary(){
+  const mk=monthStr().replace("-","");
+  const yr=parseInt(mk.slice(0,4)),mo=parseInt(mk.slice(4,6));
+  const dim=new Date(yr,mo,0).getDate();
+  const days=[];
+  for(let d=1;d<=dim;d++)days.push(mk+String(d).padStart(2,"0"));
+  const[allAtt,allLeaves]=await Promise.all([fbGet("/attendance"),fbGet("/leaves/"+currentUser.id)]);
+  const attData=allAtt||{};
+  const leavesData=allLeaves||{};
+  const sal=getSalaryData(currentUser.name);
+  let present=0,half=0,absent=0;
+  days.forEach(function(dk){
+    const r=(attData[dk]||{})[currentUser.id]||{};
+    const hasLeave=Object.values(leavesData).some(function(l){
+      return l.date===dk.slice(0,4)+"-"+dk.slice(4,6)+"-"+dk.slice(6,8)&&l.status==="approved";
+    });
+    if(hasLeave){absent++;}
+    else if(r.absent){absent++;}
+    else if(r.morning&&r.evening){present++;}
+    else if(r.morning||r.evening){half++;}
+    else{absent++;}
+  });
+  const deduction=(absent*sal.perDay)+(half*(sal.perDay/2));
+  const net=Math.max(0,sal.monthly-deduction);
+  const monthName=new Date(yr,mo-1,1).toLocaleDateString("en-IN",{month:"long",year:"numeric"});
+  document.getElementById("s-salary").innerHTML=
+    '<div style="margin-bottom:10px;font-size:13px;font-weight:600;color:var(--muted)">'+monthName+'</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">'+
+    '<div class="stat"><div class="stat-num" style="font-size:18px">₹'+sal.monthly.toLocaleString("en-IN")+'</div><div class="stat-label">Base Salary</div></div>'+
+    '<div class="stat"><div class="stat-num" style="font-size:18px;color:var(--red)">-₹'+Math.round(deduction).toLocaleString("en-IN")+'</div><div class="stat-label">Deduction</div></div>'+
+    '</div>'+
+    '<div style="background:var(--green-bg);border:1px solid var(--green);border-radius:var(--radius-sm);padding:14px;text-align:center">'+
+    '<div style="font-size:13px;color:var(--green);margin-bottom:4px">Net Salary</div>'+
+    '<div style="font-size:28px;font-weight:700;color:var(--green)">₹'+Math.round(net).toLocaleString("en-IN")+'</div>'+
+    '</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:10px">'+
+    '<div style="text-align:center"><div style="font-size:18px;font-weight:700;color:var(--green)">'+present+'</div><div style="font-size:11px;color:var(--muted)">Present</div></div>'+
+    '<div style="text-align:center"><div style="font-size:18px;font-weight:700;color:var(--blue)">'+half+'</div><div style="font-size:11px;color:var(--muted)">Half Day</div></div>'+
+    '<div style="text-align:center"><div style="font-size:18px;font-weight:700;color:var(--red)">'+absent+'</div><div style="font-size:11px;color:var(--muted)">Absent</div></div>'+
+    '</div>';
+}
+
 async function requestLeave(){
   const date=document.getElementById("leave-date").value;
   const reason=document.getElementById("leave-reason").value.trim();
