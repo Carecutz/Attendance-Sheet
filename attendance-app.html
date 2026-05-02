@@ -114,6 +114,18 @@ input:focus,select:focus{border-color:var(--blue)}
     <div class="card" id="s-today"><div class="loading"><div class="spinner"></div>Loading...</div></div>
     <div class="sec-label">This Month</div>
     <div class="card" id="s-month"><div class="loading"><div class="spinner"></div>Loading...</div></div>
+    <div class="sec-label">Request Leave</div>
+    <div class="card">
+      <label class="field-label">Date</label>
+      <input type="date" id="leave-date" style="margin-bottom:10px"/>
+      <label class="field-label">Reason</label>
+      <input type="text" id="leave-reason" placeholder="Reason for leave"/>
+      <button class="btn btn-primary btn-block" onclick="requestLeave()">Submit Leave Request</button>
+      <div class="err" id="leave-err" style="display:none"></div>
+      <div id="leave-success" style="display:none;color:var(--green);font-size:13px;margin-top:8px;text-align:center">Request submitted!</div>
+    </div>
+    <div class="sec-label">My Leave Requests</div>
+    <div id="my-leaves"><div class="loading"><div class="spinner"></div>Loading...</div></div>
   </div>
 </div>
 
@@ -127,9 +139,11 @@ input:focus,select:focus{border-color:var(--blue)}
     <button class="btn btn-sm" onclick="doLogout()">Logout</button>
   </div>
   <div class="pad">
-    <div class="tabs">
+    <div class="tabs" style="flex-wrap:wrap">
       <div class="tab active" onclick="aTab('today',this)">Today</div>
       <div class="tab" onclick="aTab('report',this)">Report</div>
+      <div class="tab" onclick="aTab('salary',this)">Salary</div>
+      <div class="tab" onclick="aTab('leave',this)">Leave</div>
       <div class="tab" onclick="aTab('staff',this)">Staff</div>
     </div>
     <div id="a-today">
@@ -144,6 +158,20 @@ input:focus,select:focus{border-color:var(--blue)}
       <div id="r-area"></div>
       <div style="margin-top:8px;font-size:11px;color:var(--muted)">P=Present &nbsp;H=Half day &nbsp;A=Absent &nbsp;|&nbsp; Hover on cell for time details</div>
     </div>
+    <div id="a-salary" style="display:none">
+      <div class="sec-label">Monthly Salary Report</div>
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <select id="sal-month" style="flex:1;margin:0"></select>
+        <button class="btn btn-sm btn-green" onclick="loadSalary()">Calculate</button>
+      </div>
+      <div id="sal-area"></div>
+    </div>
+
+    <div id="a-leave" style="display:none">
+      <div class="sec-label">Leave Requests</div>
+      <div id="leave-area"><div class="loading"><div class="spinner"></div>Loading...</div></div>
+    </div>
+
     <div id="a-staff" style="display:none">
       <div class="sec-label">Add New Staff</div>
       <div class="card">
@@ -270,7 +298,10 @@ function showPage(id){document.querySelectorAll(".page").forEach(p=>p.classList.
 async function initStaff(){
   document.getElementById("s-welcome").textContent="Hello, "+currentUser.name.split(" ")[0];
   document.getElementById("s-date").textContent=fmtDate(todayStr());
-  renderStaffToday();renderStaffMonth();
+  // Set default leave date to today
+  const ld=document.getElementById("leave-date");
+  if(ld)ld.value=todayStr();
+  renderStaffToday();renderStaffMonth();loadMyLeaves();
   setupNotifications();
 }
 
@@ -403,14 +434,19 @@ async function renderStaffMonth(){
 
 async function initAdmin(){
   document.getElementById("a-date").textContent=fmtDate(todayStr());
-  renderAdminToday();populateMonths();
+  renderAdminToday();populateMonths();populateSalaryMonths();
 }
 function aTab(tab,el){
   document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));el.classList.add("active");
-  ["today","report","staff"].forEach(t=>{document.getElementById("a-"+t).style.display=t===tab?"block":"none";});
+  ["today","report","salary","leave","staff"].forEach(t=>{
+    const el2=document.getElementById("a-"+t);
+    if(el2)el2.style.display=t===tab?"block":"none";
+  });
   if(tab==="today")renderAdminToday();
   if(tab==="staff")renderAdminStaff();
   if(tab==="report"){populateMonths();setTimeout(()=>loadReport(),100);}
+  if(tab==="salary"){populateSalaryMonths();setTimeout(()=>loadSalary(),100);}
+  if(tab==="leave")loadLeaveRequests();
 }
 async function renderAdminToday(){
   document.getElementById("a-stats").innerHTML=`<div class="loading" style="grid-column:1/-1"><div class="spinner"></div></div>`;
@@ -624,6 +660,183 @@ async function removeStaff(id){
   if(!confirm("Remove this staff member?"))return;
   await fbDelete("/staff/"+id);
   _staff=null;renderAdminStaff();
+}
+
+// Salary data
+const SALARY_DATA = {
+  "Adnan":   {monthly:11000, perDay:366},
+  "Ajzal":   {monthly:11000, perDay:366},
+  "Nishana": {monthly:10000, perDay:333},
+  "Anitha":  {monthly:11000, perDay:366},
+  "Vipin":   {monthly:15000, perDay:500},
+  "Nihal":   {monthly:10000, perDay:333}
+};
+
+function getSalaryData(name){
+  const firstName=name.split(" ")[0];
+  return SALARY_DATA[firstName]||{monthly:0,perDay:0};
+}
+
+function populateSalaryMonths(){
+  const sel=document.getElementById("sal-month");
+  if(!sel)return;
+  sel.innerHTML="";
+  for(let i=0;i<6;i++){
+    const d=new Date();d.setMonth(d.getMonth()-i);
+    const val=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");
+    const lbl=d.toLocaleDateString("en-IN",{month:"long",year:"numeric"});
+    sel.innerHTML+='<option value="'+val+'">'+lbl+'</option>';
+  }
+}
+
+async function loadSalary(){
+  const mk=document.getElementById("sal-month").value.replace("-","");
+  document.getElementById("sal-area").innerHTML='<div class="loading"><div class="spinner"></div>Loading...</div>';
+  const[staff,allAtt,allLeaves]=await Promise.all([
+    getStaff(),
+    fbGet("/attendance"),
+    fbGet("/leaves")
+  ]);
+  const attData=allAtt||{};
+  const leavesData=allLeaves||{};
+  const yr=parseInt(mk.slice(0,4)),mo=parseInt(mk.slice(4,6));
+  const dim=new Date(yr,mo,0).getDate();
+  const days=[];
+  for(let d=1;d<=dim;d++)days.push(mk+String(d).padStart(2,"0"));
+
+  let html='<div style="overflow-x:auto"><table class="rtable"><thead><tr>';
+  html+='<th style="text-align:left">Staff</th><th>Monthly</th><th style="color:var(--green)">Present</th><th style="color:var(--blue)">Half</th><th style="color:var(--red)">Absent</th><th style="color:var(--amber)">Deduction</th><th style="color:var(--green)">Net Salary</th></tr></thead><tbody>';
+
+  staff.forEach(function(u){
+    const sal=getSalaryData(u.name);
+    let present=0,half=0,absent=0;
+
+    days.forEach(function(dk){
+      const r=(attData[dk]||{})[u.id]||{};
+      // Check if approved leave for this day
+      const hasLeave=leavesData[u.id]&&Object.values(leavesData[u.id]).some(function(l){
+        return l.date===dk.slice(0,4)+"-"+dk.slice(4,6)+"-"+dk.slice(6,8)&&l.status==="approved";
+      });
+      if(hasLeave){absent++;} // unpaid leave
+      else if(r.absent){absent++;}
+      else if(r.morning&&r.evening){present++;}
+      else if(r.morning||r.evening){half++;}
+      else{absent++;}
+    });
+
+    const deduction=(absent*sal.perDay)+(half*(sal.perDay/2));
+    const net=Math.max(0,sal.monthly-deduction);
+    const col=COLORS[(u.id-1)%COLORS.length];
+
+    html+='<tr>';
+    html+='<td><div style="display:flex;align-items:center;gap:8px">';
+    html+='<div class="avatar" style="background:'+col.bg+';color:'+col.c+';width:28px;height:28px;font-size:10px">'+initials(u.name)+'</div>';
+    html+='<div><div style="font-weight:600;font-size:13px">'+u.name+'</div></div></div></td>';
+    html+='<td>₹'+sal.monthly.toLocaleString("en-IN")+'</td>';
+    html+='<td style="color:var(--green)">'+present+'</td>';
+    html+='<td style="color:var(--blue)">'+half+'</td>';
+    html+='<td style="color:var(--red)">'+absent+'</td>';
+    html+='<td style="color:var(--amber)">-₹'+Math.round(deduction).toLocaleString("en-IN")+'</td>';
+    html+='<td style="font-weight:700;color:var(--green)">₹'+Math.round(net).toLocaleString("en-IN")+'</td>';
+    html+='</tr>';
+  });
+  html+='</tbody></table></div>';
+  document.getElementById("sal-area").innerHTML=html;
+}
+
+// Leave functions
+async function requestLeave(){
+  const date=document.getElementById("leave-date").value;
+  const reason=document.getElementById("leave-reason").value.trim();
+  const err=document.getElementById("leave-err");
+  const success=document.getElementById("leave-success");
+  err.style.display="none";success.style.display="none";
+  if(!date||!reason){err.textContent="Date and reason required";err.style.display="block";return;}
+  const leaveId="leave_"+Date.now();
+  await fbSet("/leaves/"+currentUser.id+"/"+leaveId,{
+    id:leaveId,
+    uid:currentUser.id,
+    name:currentUser.name,
+    date:date,
+    reason:reason,
+    status:"pending",
+    requestedAt:new Date().toISOString()
+  });
+  document.getElementById("leave-date").value="";
+  document.getElementById("leave-reason").value="";
+  success.style.display="block";
+  loadMyLeaves();
+}
+
+async function loadMyLeaves(){
+  const data=await fbGet("/leaves/"+currentUser.id)||{};
+  const leaves=Object.values(data).sort(function(a,b){return b.requestedAt>a.requestedAt?1:-1;});
+  let html="";
+  if(leaves.length===0){
+    html='<div style="text-align:center;padding:20px;color:var(--muted)">No leave requests</div>';
+  } else {
+    leaves.forEach(function(l){
+      const statusCls=l.status==="approved"?"badge-p":l.status==="rejected"?"badge-a":"badge-h";
+      const statusText=l.status==="approved"?"Approved":l.status==="rejected"?"Rejected":"Pending";
+      html+='<div class="card" style="padding:12px;margin-bottom:8px">';
+      html+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">';
+      html+='<div style="font-weight:600;font-size:14px">'+new Date(l.date+"T00:00:00").toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"})+'</div>';
+      html+='<span class="badge '+statusCls+'">'+statusText+'</span>';
+      html+='</div>';
+      html+='<div style="font-size:13px;color:var(--muted)">'+l.reason+'</div>';
+      html+='</div>';
+    });
+  }
+  document.getElementById("my-leaves").innerHTML=html;
+}
+
+async function loadLeaveRequests(){
+  document.getElementById("leave-area").innerHTML='<div class="loading"><div class="spinner"></div>Loading...</div>';
+  const[staff,allLeaves]=await Promise.all([getStaff(),fbGet("/leaves")]);
+  const leavesData=allLeaves||{};
+  let html="";
+  let hasAny=false;
+
+  staff.forEach(function(u){
+    const userLeaves=leavesData[u.id]?Object.values(leavesData[u.id]):[];
+    const pending=userLeaves.filter(function(l){return l.status==="pending";});
+    const approved=userLeaves.filter(function(l){return l.status==="approved";});
+    const rejected=userLeaves.filter(function(l){return l.status==="rejected";});
+    if(userLeaves.length===0)return;
+    hasAny=true;
+    const col=COLORS[(u.id-1)%COLORS.length];
+    html+='<div class="card" style="margin-bottom:10px">';
+    html+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">';
+    html+='<div class="avatar" style="background:'+col.bg+';color:'+col.c+';width:32px;height:32px;font-size:11px">'+initials(u.name)+'</div>';
+    html+='<div><div style="font-weight:600">'+u.name+'</div>';
+    html+='<div style="font-size:12px;color:var(--muted)">'+pending.length+' pending'+'</div></div></div>';
+
+    userLeaves.sort(function(a,b){return b.requestedAt>a.requestedAt?1:-1;}).forEach(function(l){
+      const statusCls=l.status==="approved"?"badge-p":l.status==="rejected"?"badge-a":"badge-h";
+      const statusText=l.status==="approved"?"Approved":l.status==="rejected"?"Rejected":"Pending";
+      html+='<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">';
+      html+='<div>';
+      html+='<div style="font-size:13px;font-weight:500">'+new Date(l.date+"T00:00:00").toLocaleDateString("en-IN",{day:"numeric",month:"short"})+'</div>';
+      html+='<div style="font-size:12px;color:var(--muted)">'+l.reason+'</div>';
+      html+='</div>';
+      html+='<div style="display:flex;align-items:center;gap:6px">';
+      html+='<span class="badge '+statusCls+'">'+statusText+'</span>';
+      if(l.status==="pending"){
+        html+='<button class="btn btn-sm btn-green" onclick="updateLeave(\''+u.id+'\',\''+l.id+'\',\'approved\')">✓</button>';
+        html+='<button class="btn btn-sm btn-danger" onclick="updateLeave(\''+u.id+'\',\''+l.id+'\',\'rejected\')">✗</button>';
+      }
+      html+='</div></div>';
+    });
+    html+='</div>';
+  });
+
+  if(!hasAny) html='<div style="text-align:center;padding:30px;color:var(--muted)">No leave requests yet</div>';
+  document.getElementById("leave-area").innerHTML=html;
+}
+
+async function updateLeave(uid,leaveId,status){
+  await fbPatch("/leaves/"+uid+"/"+leaveId,{status:status});
+  loadLeaveRequests();
 }
 
 if("serviceWorker" in navigator){
