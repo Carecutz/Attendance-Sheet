@@ -782,18 +782,47 @@ function loadStaffProfile(){
   const savedPhoto=localStorage.getItem("cw_photo_"+u.id);
   const profileDiv=document.getElementById("s-profile");
   if(!profileDiv)return;
-  const photoHtml=savedPhoto
-    ? '<img src="'+savedPhoto+'" style="width:64px;height:64px;border-radius:50%;object-fit:cover;border:2px solid rgba(201,168,76,0.5);cursor:pointer" onclick="document.getElementById('photo-input').click()" title="Change photo"/>'
-    : '<div class="avatar" style="background:'+col.bg+';color:'+col.c+';width:64px;height:64px;font-size:20px;cursor:pointer;border:2px dashed rgba(201,168,76,0.3)" onclick="document.getElementById('photo-input').click()" title="Add photo">'+initials(u.name)+'</div>';
-  profileDiv.innerHTML=
-    '<div style="position:relative">'+photoHtml+
-    '<div style="position:absolute;bottom:0;right:0;background:#c9a84c;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-size:11px;cursor:pointer" onclick="document.getElementById('photo-input').click()">📷</div></div>'+
-    '<div style="flex:1">'+
-    '<div style="font-size:17px;font-weight:700;color:var(--text)">'+u.name+'</div>'+
+  
+  // Create elements programmatically to avoid quote issues
+  profileDiv.innerHTML="";
+  
+  // Photo wrapper
+  const wrap=document.createElement("div");
+  wrap.style.cssText="position:relative;cursor:pointer";
+  wrap.onclick=function(){document.getElementById("photo-input").click();};
+  
+  if(savedPhoto){
+    const img=document.createElement("img");
+    img.src=savedPhoto;
+    img.style.cssText="width:64px;height:64px;border-radius:50%;object-fit:cover;border:2px solid rgba(201,168,76,0.5)";
+    wrap.appendChild(img);
+  } else {
+    const av=document.createElement("div");
+    av.className="avatar";
+    av.style.cssText="background:"+col.bg+";color:"+col.c+";width:64px;height:64px;font-size:20px;border:2px dashed rgba(201,168,76,0.3)";
+    av.textContent=initials(u.name);
+    wrap.appendChild(av);
+  }
+  
+  const cam=document.createElement("div");
+  cam.style.cssText="position:absolute;bottom:0;right:0;background:#c9a84c;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-size:11px";
+  cam.textContent="📷";
+  wrap.appendChild(cam);
+  profileDiv.appendChild(wrap);
+  
+  // Info
+  const info=document.createElement("div");
+  info.style.flex="1";
+  info.innerHTML='<div style="font-size:17px;font-weight:700;color:var(--text)">'+u.name+'</div>'+
     '<div style="font-size:13px;color:var(--muted);margin-top:2px">'+u.role+'</div>'+
-    '<div style="font-size:12px;color:rgba(201,168,76,0.6);margin-top:4px">@'+u.username+'</div>'+
-    '</div>'+
-    '<input type="file" id="photo-input" accept="image/*" style="display:none" onchange="uploadPhoto(this)">';
+    '<div style="font-size:12px;color:rgba(201,168,76,0.6);margin-top:4px">@'+u.username+'</div>';
+  profileDiv.appendChild(info);
+  
+  // File input
+  const inp=document.createElement("input");
+  inp.type="file";inp.id="photo-input";inp.accept="image/*";inp.style.display="none";
+  inp.onchange=function(){uploadPhoto(this);};
+  profileDiv.appendChild(inp);
 }
 
 function uploadPhoto(input){
