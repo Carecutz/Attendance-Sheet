@@ -126,6 +126,8 @@ input:focus,select:focus{border-color:var(--blue)}
     <button class="btn btn-sm" onclick="doLogout()">Logout</button>
   </div>
   <div class="pad">
+    <!-- Profile -->
+    <div id="s-profile" style="display:flex;align-items:center;gap:14px;padding:14px 0 4px"></div>
     <div class="sec-label">Today</div>
     <div class="card" id="s-today"><div class="loading"><div class="spinner"></div>Loading...</div></div>
     <div class="sec-label">This Month</div>
@@ -166,6 +168,18 @@ input:focus,select:focus{border-color:var(--blue)}
     </div>
     <div id="a-today">
       <div class="stat-grid" id="a-stats"></div>
+      <!-- Holiday announcement -->
+      <div class="card" style="background:rgba(201,168,76,0.08);border:1px solid rgba(201,168,76,0.2);margin-bottom:12px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+          <span style="font-size:20px">🎉</span>
+          <div style="font-weight:600;font-size:14px;color:#c9a84c">Announce Holiday</div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <input type="date" id="holiday-date" style="flex:1;margin:0;font-size:13px"/>
+          <input type="text" id="holiday-name" placeholder="e.g. Onam" style="flex:1;margin:0;font-size:13px"/>
+        </div>
+        <button class="btn btn-sm" style="width:100%;margin-top:8px;background:rgba(201,168,76,0.15);border-color:rgba(201,168,76,0.3);color:#c9a84c" onclick="announceHoliday()">📢 Notify All Staff</button>
+      </div>
       <div id="a-list"></div>
     </div>
     <div id="a-report" style="display:none">
@@ -316,11 +330,12 @@ function showPage(id){document.querySelectorAll(".page").forEach(p=>p.classList.
 async function initStaff(){
   document.getElementById("s-welcome").textContent="Hello, "+currentUser.name.split(" ")[0];
   document.getElementById("s-date").textContent=fmtDate(todayStr());
-  // Set default leave date to today
   const ld=document.getElementById("leave-date");
   if(ld)ld.value=todayStr();
+  loadStaffProfile();
   renderStaffToday();renderStaffMonth();loadMyLeaves();loadMySalary();
   setupNotifications();
+  setTimeout(checkHolidayNotifications,2000);
 }
 
 async function setupNotifications(){
@@ -479,6 +494,10 @@ async function renderStaffMonth(){
 async function initAdmin(){
   document.getElementById("a-date").textContent=fmtDate(todayStr());
   renderAdminToday();populateMonths();populateSalaryMonths();
+  // Set default holiday date to tomorrow
+  const tomorrow=new Date();tomorrow.setDate(tomorrow.getDate()+1);
+  const hd=document.getElementById("holiday-date");
+  if(hd)hd.value=tomorrow.getFullYear()+"-"+String(tomorrow.getMonth()+1).padStart(2,"0")+"-"+String(tomorrow.getDate()).padStart(2,"0");
 }
 function aTab(tab,el){
   document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));el.classList.add("active");
@@ -704,6 +723,89 @@ async function removeStaff(id){
   if(!confirm("Remove this staff member?"))return;
   await fbDelete("/staff/"+id);
   _staff=null;renderAdminStaff();
+}
+
+// Holiday announcement
+async function announceHoliday(){
+  const date=document.getElementById("holiday-date").value;
+  const name=document.getElementById("holiday-name").value.trim();
+  if(!date||!name){alert("Date and holiday name required!");return;}
+  // Save to Firebase
+  await fbSet("/holidays/"+date.replace(/-/g,""),{date,name,announcedAt:new Date().toISOString()});
+  // Notify all staff via Firebase (staff will see on next login/refresh)
+  await fbSet("/announcements/"+Date.now(),{
+    type:"holiday",
+    date,
+    name,
+    message:"🎉 Holiday announced: "+name+" on "+new Date(date+"T00:00:00").toLocaleDateString("en-IN",{weekday:"long",day:"numeric",month:"long"}),
+    createdAt:new Date().toISOString()
+  });
+  document.getElementById("holiday-date").value="";
+  document.getElementById("holiday-name").value="";
+  alert("Holiday announced! Staff will be notified.");
+}
+
+// Check holiday notifications for staff
+async function checkHolidayNotifications(){
+  if(!currentUser||currentUser.isAdmin)return;
+  const lastCheck=localStorage.getItem("cw_last_notif_check")||"0";
+  const announcements=await fbGet("/announcements")||{};
+  const newOnes=Object.values(announcements).filter(function(a){
+    return a.createdAt>lastCheck;
+  });
+  newOnes.forEach(function(a){
+    if(Notification.permission==="granted"){
+      new Notification("Carewax — "+a.name+" 🎉",{
+        body:a.message,
+        icon:"icon-192.png",
+        tag:"holiday-"+a.date,
+        requireInteraction:true
+      });
+      playAlertSound();
+    }
+  });
+  localStorage.setItem("cw_last_notif_check",new Date().toISOString());
+}
+
+// Profile picture
+async function loadStaffProfile(){
+  const u=currentUser;
+  const col=COLORS[(u.id-1)%COLORS.length];
+  const savedPhoto=localStorage.getItem("cw_photo_"+u.id);
+  const profileDiv=document.getElementById("s-profile");
+  if(!profileDiv)return;
+
+  let avatarHtml="";
+  if(savedPhoto){
+    avatarHtml='<div style="position:relative;cursor:pointer" onclick="document.getElementById(\'photo-input\').click()">'+
+      '<img src="'+savedPhoto+'" style="width:60px;height:60px;border-radius:50%;object-fit:cover;border:2px solid rgba(201,168,76,0.4)"/>'+
+      '<div style="position:absolute;bottom:0;right:0;background:#c9a84c;border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-size:10px">📷</div>'+
+      '</div>';
+  } else {
+    avatarHtml='<div style="position:relative;cursor:pointer" onclick="document.getElementById(\'photo-input\').click()">'+
+      '<div class="avatar" style="background:'+col.bg+';color:'+col.c+';width:60px;height:60px;font-size:18px">'+initials(u.name)+'</div>'+
+      '<div style="position:absolute;bottom:0;right:0;background:#c9a84c;border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-size:10px">📷</div>'+
+      '</div>';
+  }
+
+  profileDiv.innerHTML=avatarHtml+
+    '<div style="flex:1">'+
+    '<div style="font-size:17px;font-weight:700;color:var(--text)">'+u.name+'</div>'+
+    '<div style="font-size:13px;color:var(--muted);margin-top:2px">'+u.role+'</div>'+
+    '<div style="font-size:12px;color:rgba(201,168,76,0.7);margin-top:4px">@'+u.username+'</div>'+
+    '</div>'+
+    '<input type="file" id="photo-input" accept="image/*" style="display:none" onchange="uploadPhoto(this)">';
+}
+
+function uploadPhoto(input){
+  const file=input.files[0];
+  if(!file)return;
+  const reader=new FileReader();
+  reader.onload=function(e){
+    localStorage.setItem("cw_photo_"+currentUser.id,e.target.result);
+    loadStaffProfile();
+  };
+  reader.readAsDataURL(file);
 }
 
 // Salary data
