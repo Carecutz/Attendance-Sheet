@@ -1038,8 +1038,8 @@ async function loadLeaveRequests(){
       html+='<div style="display:flex;align-items:center;gap:6px">';
       html+='<span class="badge '+statusCls+'">'+statusText+'</span>';
       if(l.status==="pending"){
-        html+='<button class="btn btn-sm btn-green" onclick="updateLeave(\''+u.id+'\',\''+l.id+'\',\'approved\')">✓</button>';
-        html+='<button class="btn btn-sm btn-danger" onclick="updateLeave(\''+u.id+'\',\''+l.id+'\',\'rejected\')">✗</button>';
+        html+='<button class="btn btn-sm btn-green" data-uid="'+u.id+'" data-lid="'+l.id+'" data-action="approved" onclick="updateLeave(this.dataset.uid,this.dataset.lid,this.dataset.action)">✓</button>';
+        html+='<button class="btn btn-sm btn-danger" data-uid="'+u.id+'" data-lid="'+l.id+'" data-action="rejected" onclick="updateLeave(this.dataset.uid,this.dataset.lid,this.dataset.action)">✗</button>';
       }
       html+='</div></div>';
     });
